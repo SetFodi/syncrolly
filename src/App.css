@@ -1,0 +1,124 @@
+/* Modal Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px); /* Background blur effect */
+  opacity: 0; /* Start with the background invisible */
+  transition: opacity 0.5s ease-out; /* Smooth background fade-in */
+}
+
+.modal-overlay.show {
+  opacity: 1; /* Background fades in when modal shows */
+}
+
+/* Modal Content Styling */
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(0.9); /* Start smaller */
+  opacity: 0; /* Start with invisible modal content */
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out; /* Smooth transition for modal entry */
+}
+
+.modal-content.show {
+  transform: scale(1); /* Modal zooms in */
+  opacity: 1; /* Modal fades in */
+}
+
+.modal-content h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  color: #333;
+  font-weight: 600;
+}
+
+/* Input Fields with Smooth Animation */
+.modal-input {
+  padding: 12px;
+  font-size: 16px;
+  width: 80%;
+  margin-bottom: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  transition: all 0.3s ease; /* Smooth transition for all properties */
+}
+
+.modal-input:focus {
+  border-color: #007bff; /* Highlight the border color when focused */
+  transform: scale(1.05); /* Slightly scale up the input field */
+  box-shadow: 0px 4px 8px rgba(0, 123, 255, 0.3); /* Add subtle shadow effect */
+  outline: none; /* Remove default focus outline */
+}
+
+/* Button Styling */
+.modal-btn {
+  padding: 12px 24px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin: 10px 5px;
+  font-size: 16px;
+  font-weight: 500;
+  transition: background-color 0.3s, transform 0.2s ease-in-out;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Soft shadow for the button */
+}
+
+.modal-btn:hover {
+  background-color: #0056b3;
+  transform: translateY(-2px); /* Button lift effect */
+}
+
+.cancel-btn {
+  background-color: #f44336; /* Red for cancel */
+}
+
+.cancel-btn:hover {
+  background-color: #d32f2f;
+  transform: translateY(-2px); /* Button lift effect for cancel */
+}
+
+/* Modal Close Button */
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: transparent;
+  border: none;
+  font-size: 20px;
+  color: #333;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.close-btn:hover {
+  color: #f44336; /* Change to red on hover */
+}
+
+/* General layout of the homepage */
+.home-container {
+  text-align: center;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center content horizontally */
+  justify-content: flex-start; /* Align content to the top */
+  height: 100vh;
+  background-color: #f9f9f9; /* Light background for a clean feel */
+  font-family: 'Roboto', sans-serif; /* A modern, clean font */
+  overflow: hidden; /* Hide overflow when modal is active */
+}
