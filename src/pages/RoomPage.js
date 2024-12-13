@@ -319,38 +319,38 @@ function RoomPage() {
     }
   };
 
-  const handleDeleteFile = async (fileId) => {
+const handleDeleteFile = async (fileId) => {
+  try {
+    const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const responseText = await response.text();
+    console.log('Raw server response:', responseText);
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
-        method: 'DELETE',
-      });
+      const data = response.ok ? JSON.parse(responseText) : null;
 
-      const responseText = await response.text();
-      console.log('Raw server response:', responseText);
-
-      try {
-        const data = response.ok ? JSON.parse(responseText) : null;
-
-        if (response.ok) {
-          alert('File deleted successfully');
-          setFiles((prevFiles) => prevFiles.filter(file => file._id !== fileId));
-        } else {
-          try {
-            const errorData = JSON.parse(responseText);
-            alert(errorData.error || 'Failed to delete file');
-          } catch (parseError) {
-            alert('Failed to delete file: ' + responseText);
-          }
-        }
-      } catch (jsonError) {
-        console.error('JSON parsing error:', jsonError);
-        alert('Server response was not in valid JSON format. Raw response: ' + responseText);
+      if (response.ok) {
+        alert('File deleted successfully');
+        setFiles((prevFiles) => prevFiles.filter((file) => file._id !== fileId));
+      } else {
+        const errorData = JSON.parse(responseText);
+        alert(errorData.error || 'Failed to delete file');
       }
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      alert('Error deleting file: ' + error.message);
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError);
+      alert('Failed to delete file: ' + responseText);
     }
-  };
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    alert('Error deleting file: ' + error.message);
+  }
+};
+
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
