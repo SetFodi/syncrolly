@@ -20,15 +20,20 @@ const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000'
   .map(url => url.trim());
 
 app.use(cors({
-  origin: allowedFrontendUrl,
-  methods: ['GET', 'POST', 'DELETE'], // Add DELETE here
+  origin: allowedFrontendUrl, // Allow specific frontend URLs
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
+  allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
+  credentials: true, // Allow credentials if needed
 }));
+
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(',')); // Allow specified origins
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
+  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
   res.sendStatus(200); // Respond OK to preflight
 });
+
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
