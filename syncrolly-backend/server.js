@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Set up CORS
-const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000')
+const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000,https://www.syncrolly.com/')
   .split(',')
   .map(url => url.trim());
 
