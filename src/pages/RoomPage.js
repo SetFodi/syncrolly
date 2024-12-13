@@ -285,6 +285,8 @@ function RoomPage() {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/upload/${roomId}`, {
         method: 'POST',
         body: formData,
+        mode: 'cors',
+        credentials: 'include',
       });
 
       const responseText = await response.text();
@@ -323,6 +325,8 @@ const handleDeleteFile = async (fileId) => {
   try {
     const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
       method: 'DELETE',
+      mode: 'cors',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
