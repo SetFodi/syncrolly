@@ -19,6 +19,7 @@ const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000'
   .split(',')
   .map(url => url.trim());
 
+// Ensure CORS is defined before any routes or middleware
 app.use(cors({
   origin: allowedFrontendUrl, // Allow specific frontend URLs
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
@@ -26,6 +27,7 @@ app.use(cors({
   credentials: true, // Allow credentials if needed
 }));
 
+// Preflight handling (applicable for DELETE and POST requests)
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(',')); // Allow specified origins
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
@@ -33,6 +35,7 @@ app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
   res.sendStatus(200); // Respond OK to preflight
 });
+
 
 
 app.use(express.json());
