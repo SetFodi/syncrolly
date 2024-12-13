@@ -143,62 +143,47 @@ async function startServer() {
     });
 
     // File Deletion Route
-    app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
-      try {
-        const { roomId, fileId } = req.params;
+app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
+  try {
+    const { roomId, fileId } = req.params;
 
-        // Validate ObjectId
-        if (!ObjectId.isValid(fileId)) {
-          return res.status(400).json({ error: 'Invalid file ID format.' });
-        }
+    if (!ObjectId.isValid(fileId)) {
+      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+      return res.status(400).json({ error: 'Invalid file ID format.' });
+    }
 
-        // Find the file in the database by the _id (MongoDB's default identifier)
-        const fileToDelete = await uploadsCollection.findOne({
-          roomId,
-          _id: new ObjectId(fileId)
-        });
+    const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
 
-        if (!fileToDelete) {
-          return res.status(404).json({ error: 'File not found.' });
-        }
+    if (!fileToDelete) {
+      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+      return res.status(404).json({ error: 'File not found.' });
+    }
 
-        // Delete the file document from the database
-        const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
+    const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
+    const filePath = path.join(__dirname, 'uploads', fileToDelete.fileUrl.split('/').pop());
 
-        // Log deletion result for debugging
-        console.log('Delete result:', deleteResult);
-
-        // If the file is stored locally, delete the actual file from the file system
-        const filePath = path.join(__dirname, 'uploads', fileToDelete.fileUrl.split('/').pop());
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            console.error('Failed to delete file from filesystem:', err);
-            // Note: We're not stopping the process, as the database entry is already removed
-          } else {
-            console.log('File deleted from file system:', filePath);
-          }
-        });
-
-        // Emit the event to notify clients that the file has been deleted
-        io.to(roomId).emit('file_deleted', fileId);
-
-        // Explicitly send a JSON response
-        res.status(200).json({
-          success: true,
-          message: 'File deleted successfully',
-          deletedCount: deleteResult.deletedCount
-        });
-
-      } catch (error) {
-        console.error('Error in file deletion:', error);
-
-        // Ensure a JSON response is always sent
-        res.status(500).json({
-          error: 'Internal Server Error',
-          details: error.message
-        });
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error('Failed to delete file from filesystem:', err);
+      } else {
+        console.log('File deleted from filesystem:', filePath);
       }
     });
+
+    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    res.status(200).json({
+      success: true,
+      message: 'File deleted successfully',
+      deletedCount: deleteResult.deletedCount,
+    });
+  } catch (error) {
+    console.error('Error in file deletion:', error);
+
+    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+});
+
 
     // Socket.IO Connection
     io.on('connection', (socket) => {
