@@ -49,9 +49,13 @@ function RoomPage() {
   const [loading, setLoading] = useState(isNameSet);
   const [isCodeMode, setIsCodeMode] = useState(true); // Default to code mode
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
-
   const typingTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("js"); // Default to JS
+
+
+  
+
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL;
   console.log('Backend URL:', backendUrl);
@@ -243,7 +247,36 @@ function RoomPage() {
       alert('Please enter a valid name.');
     }
   };
-
+  const handleDownload = () => {
+    // Determine the file content based on the editor mode
+    const content = isCodeMode ? plainText : plainText; // You might want to customize this if there's specific text content for plain text mode
+  
+    // Map language to file extension
+    const languageFileExtensions = {
+      javascript: 'js',
+      python: 'py',
+      cpp: 'cpp',
+      php: 'php',
+      markdown: 'md',
+      json: 'json',
+      text: 'txt'
+    };
+  
+    // Get the selected language from your editor's state
+    const fileExtension = languageFileExtensions[selectedLanguage] || 'txt'; // Default to 'txt' if no match
+  
+    // Create a Blob object with the content
+    const blob = new Blob([content], { type: 'text/plain' });
+  
+    // Create a link element and trigger the download
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension based on selectedLanguage
+    link.click();
+  };
+  
+  
+  
   const handleEditableToggle = () => {
     if (!isCreator) return;
     socket.emit('toggle_editability', { roomId, userId: storedUserId }, (response) => {
@@ -356,12 +389,13 @@ const handleDeleteFile = async (fileId) => {
 };
 
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    socket.emit('change_theme', { roomId, theme: newTheme });
-  };
+const toggleTheme = () => {
+  const newTheme = theme === 'light' ? 'dark' : 'light';
+  setTheme(newTheme);
+  localStorage.setItem('theme', newTheme);
+};
+
+
 
   const toggleChatBox = () => {
     setChatVisible(!chatVisible);
@@ -500,6 +534,9 @@ const handleDeleteFile = async (fileId) => {
               <button onClick={() => setFilesModalVisible(true)} className={styles['files-btn']}>
                 View Files
               </button>
+  <button onClick={handleDownload} className={styles['download-btn']}>
+    Download
+  </button>
             </div>
 
             <div className={styles['theme-toggle']}>
@@ -526,14 +563,16 @@ const handleDeleteFile = async (fileId) => {
                 <label htmlFor="language-select" style={{ marginRight: '8px' }}>Language:</label>
                 <select
                   id="language-select"
-                  value={currentLanguage}
-                  onChange={(e) => setCurrentLanguage(e.target.value)}
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
                 >
                   <option value="javascript">JavaScript</option>
                   <option value="python">Python</option>
                   <option value="cpp">C/C++</option>
                   <option value="php">PHP</option>
                   <option value="markdown">Markdown</option>
+                  <option value="json">JSON</option>
+                  <option value="text">Text</option>
                 </select>
               </div>
             )}
