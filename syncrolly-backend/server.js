@@ -21,8 +21,9 @@ const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000'
 
 app.use(cors({
   origin: allowedFrontendUrl,
-  methods: ['GET', 'POST'],
+  methods: ['GET', 'POST', 'DELETE'], // Add DELETE here
 }));
+
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
