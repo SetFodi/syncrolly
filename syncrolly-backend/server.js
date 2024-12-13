@@ -93,17 +93,8 @@ async function startServer() {
 
     const io = new Server(server, {
       cors: {
-        origin: function (origin, callback) {
-          // Mirror the CORS middleware's origin function
-          if (!origin) return callback(null, true);
-          if (allowedFrontendUrls.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: allowedFrontendUrls, // Ensure this includes all allowed frontend URLs
         methods: ['GET', 'POST'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
       },
     });
