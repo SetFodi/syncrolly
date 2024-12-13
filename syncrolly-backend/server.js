@@ -23,7 +23,12 @@ app.use(cors({
   origin: allowedFrontendUrl,
   methods: ['GET', 'POST', 'DELETE'], // Add DELETE here
 }));
-
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200); // Respond OK to preflight
+});
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
