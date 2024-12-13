@@ -15,30 +15,28 @@ const app = express();
 const server = http.createServer(app);
 
 // Set up CORS
-const allowedFrontendUrls = (process.env.FRONTEND_URLS || 'http://localhost:3000')
+const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000')
   .split(',')
   .map(url => url.trim());
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    if (allowedFrontendUrls.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-};
+// Ensure CORS is defined before any routes or middleware
+app.use(cors({
+  origin: allowedFrontendUrl, // Allow specific frontend URLs
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
+  allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
+  credentials: true, // Allow credentials if needed
+}));
 
-// Apply CORS middleware globally before all routes
-app.use(cors(corsOptions));
+// Preflight handling (applicable for DELETE and POST requests)
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(',')); // Allow specified origins
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
+  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
+  res.sendStatus(200); // Respond OK to preflight
+});
 
-// Remove the explicit app.options('*', ...) handler
-// The CORS middleware handles preflight requests automatically
+
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -93,9 +91,8 @@ async function startServer() {
 
     const io = new Server(server, {
       cors: {
-        origin: allowedFrontendUrls, // Ensure this includes all allowed frontend URLs
+        origin: allowedFrontendUrl,
         methods: ['GET', 'POST'],
-        credentials: true,
       },
     });
 
@@ -154,41 +151,47 @@ async function startServer() {
     });
 
     // File Deletion Route
-    app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
-      try {
-        const { roomId, fileId } = req.params;
+app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
+  try {
+    const { roomId, fileId } = req.params;
 
-        if (!ObjectId.isValid(fileId)) {
-          return res.status(400).json({ error: 'Invalid file ID format.' });
-        }
+    if (!ObjectId.isValid(fileId)) {
+      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+      return res.status(400).json({ error: 'Invalid file ID format.' });
+    }
 
-        const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
+    const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
 
-        if (!fileToDelete) {
-          return res.status(404).json({ error: 'File not found.' });
-        }
+    if (!fileToDelete) {
+      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+      return res.status(404).json({ error: 'File not found.' });
+    }
 
-        const filePath = path.join(__dirname, 'uploads', path.basename(fileToDelete.fileUrl));
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            console.error('Failed to delete file from filesystem:', err);
-          } else {
-            console.log('File deleted from filesystem:', filePath);
-          }
-        });
+    const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
+    const filePath = path.join(__dirname, 'uploads', fileToDelete.fileUrl.split('/').pop());
 
-        const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
-
-        res.status(200).json({
-          success: true,
-          message: 'File deleted successfully',
-          deletedCount: deleteResult.deletedCount,
-        });
-      } catch (error) {
-        console.error('Error in file deletion:', error);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error('Failed to delete file from filesystem:', err);
+      } else {
+        console.log('File deleted from filesystem:', filePath);
       }
     });
+
+    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    res.status(200).json({
+      success: true,
+      message: 'File deleted successfully',
+      deletedCount: deleteResult.deletedCount,
+    });
+  } catch (error) {
+    console.error('Error in file deletion:', error);
+
+    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+});
+
 
     // Socket.IO Connection
     io.on('connection', (socket) => {
