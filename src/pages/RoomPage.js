@@ -52,6 +52,8 @@ function RoomPage() {
   const typingTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("js"); // Default to JS
+  const [showReminder, setShowReminder] = useState(false);
+
 
 
   
@@ -294,9 +296,15 @@ function RoomPage() {
         alert(response.error);
       } else if (response.success) {
         console.log(`Editor mode toggled to ${response.editorMode}`);
+        if (response.editorMode === 'text') {
+          setShowReminder(true);  // Show the reminder when switching to text editor mode
+        } else {
+          setShowReminder(false);  // Hide the reminder when switching back to code editor mode
+        }
       }
     });
   };
+  
 
   const handleSendMessage = () => {
     if (!chatInput.trim()) return;
@@ -593,6 +601,7 @@ const toggleTheme = () => {
                 readOnly={!(isEditable || isCreator)}
               />
             ) : (
+              <>
               <textarea
                 value={plainText}
                 onChange={handlePlainTextChange}
@@ -602,6 +611,12 @@ const toggleTheme = () => {
                 disabled={!isEditable && !isCreator}
                 onFocus={handleTypingStart}
               />
+              {showReminder && (
+        <div className={styles['editor-reminder']}>
+          <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
+        </div>
+      )}
+              </>
             )}
           </div>
 
