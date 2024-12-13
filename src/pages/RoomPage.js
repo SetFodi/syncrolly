@@ -282,27 +282,38 @@ function RoomPage() {
     formData.append('userId', storedUserId);
 
     try {
-      const response = await fetch(`${backendUrl}/upload/${roomId}`, {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/upload/${roomId}`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
         credentials: 'include',
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setFiles((prevFiles) => {
-          if (!prevFiles.some((file) => file.fileUrl === data.fileUrl)) {
-            return [...prevFiles, data];
-          }
-          return prevFiles;
-        });
+      const responseText = await response.text();
+      try {
+        const data = response.ok ? JSON.parse(responseText) : null;
 
-        socket.emit('new_file', data);
-        alert('File uploaded successfully');
-      } else {
-        const errorData = await response.json();
-        alert('Upload failed: ' + (errorData.error || 'Unknown error'));
+        if (response.ok) {
+          setFiles((prevFiles) => {
+            if (!prevFiles.some((file) => file.fileUrl === data.fileUrl)) {
+              return [...prevFiles, data];
+            }
+            return prevFiles;
+          });
+
+          socket.emit('new_file', data);
+          alert('File uploaded successfully');
+        } else {
+          try {
+            const errorData = JSON.parse(responseText);
+            alert('Upload failed: ' + errorData.error);
+          } catch (parseError) {
+            alert('Upload failed: ' + responseText);
+          }
+        }
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+        alert('Server response was not in JSON format. Raw response: ' + responseText);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -310,30 +321,40 @@ function RoomPage() {
     }
   };
 
-  const handleDeleteFile = async (fileId) => {
+const handleDeleteFile = async (fileId) => {
+  try {
+    const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
+      method: 'DELETE',
+      mode: 'cors',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const responseText = await response.text();
+    console.log('Raw server response:', responseText);
+
     try {
-      const response = await fetch(`${backendUrl}/delete_file/${roomId}/${fileId}`, {
-        method: 'DELETE',
-        mode: 'cors',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const data = response.ok ? JSON.parse(responseText) : null;
 
       if (response.ok) {
-        const data = await response.json();
-        alert(data.message || 'File deleted successfully');
+        alert('File deleted successfully');
         setFiles((prevFiles) => prevFiles.filter((file) => file._id !== fileId));
       } else {
-        const errorData = await response.json();
+        const errorData = JSON.parse(responseText);
         alert(errorData.error || 'Failed to delete file');
       }
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      alert('Error deleting file: ' + error.message);
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError);
+      alert('Failed to delete file: ' + responseText);
     }
-  };
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    alert('Error deleting file: ' + error.message);
+  }
+};
+
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
