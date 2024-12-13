@@ -28,13 +28,12 @@ app.use(cors({
 }));
 
 // Preflight handling (applicable for DELETE and POST requests)
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(',')); // Allow specified origins
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
-  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
-  res.sendStatus(200); // Respond OK to preflight
-});
+app.options('*', cors({
+  origin: allowedFrontendUrl,
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 
 
 
@@ -102,31 +101,26 @@ async function startServer() {
         const { roomId } = req.params;
         const { userId } = req.body;
         const file = req.file;
-
+    
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    
         if (!file) {
           return res.status(400).json({ error: 'No file uploaded.' });
         }
-
-        console.log(`File uploaded: ${file.originalname}`);
+    
         const fileUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/${file.filename}`;
-        console.log(`File URL: ${fileUrl}`);
-
         const room = await roomsCollection.findOne({ roomId });
+    
         if (!room) {
           return res.status(404).json({ error: 'Room not found.' });
         }
-
+    
         const userName = room.users[userId];
         if (!userName) {
           return res.status(400).json({ error: 'Invalid user ID.' });
         }
-
-        // Check if file already exists in the database
-        const existingFile = await uploadsCollection.findOne({ roomId, fileUrl });
-        if (existingFile) {
-          return res.status(400).json({ error: 'This file has already been uploaded.' });
-        }
-
+    
         const newFile = {
           roomId,
           fileName: file.originalname,
@@ -134,64 +128,46 @@ async function startServer() {
           uploadedBy: userName,
           uploadedAt: new Date(),
         };
-
+    
         await uploadsCollection.insertOne(newFile);
-
-        // Emit event to notify the room about the new file
-        io.to(roomId).emit('new_file', newFile);
-
-        console.log('New file uploaded:', newFile);
-        console.log(`Uploading to: ${fileUrl}`);
-
         res.status(200).json(newFile);
       } catch (error) {
-        console.error('Error in file upload:', error);
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
       }
     });
+    
 
     // File Deletion Route
-app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
-  try {
-    const { roomId, fileId } = req.params;
-
-    if (!ObjectId.isValid(fileId)) {
-      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
-      return res.status(400).json({ error: 'Invalid file ID format.' });
-    }
-
-    const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
-
-    if (!fileToDelete) {
-      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
-      return res.status(404).json({ error: 'File not found.' });
-    }
-
-    const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
-    const filePath = path.join(__dirname, 'uploads', fileToDelete.fileUrl.split('/').pop());
-
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        console.error('Failed to delete file from filesystem:', err);
-      } else {
-        console.log('File deleted from filesystem:', filePath);
+    app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
+      try {
+        const { roomId, fileId } = req.params;
+    
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+    
+        if (!ObjectId.isValid(fileId)) {
+          return res.status(400).json({ error: 'Invalid file ID format.' });
+        }
+    
+        const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
+        if (!fileToDelete) {
+          return res.status(404).json({ error: 'File not found.' });
+        }
+    
+        const filePath = path.join(__dirname, 'uploads', path.basename(fileToDelete.fileUrl));
+        fs.unlink(filePath, (err) => {
+          if (err) {
+            console.error('Error deleting file from filesystem:', err);
+          }
+        });
+    
+        await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
+        res.status(200).json({ success: true, message: 'File deleted successfully' });
+      } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
       }
     });
-
-    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
-    res.status(200).json({
-      success: true,
-      message: 'File deleted successfully',
-      deletedCount: deleteResult.deletedCount,
-    });
-  } catch (error) {
-    console.error('Error in file deletion:', error);
-
-    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
-    res.status(500).json({ error: 'Internal Server Error', details: error.message });
-  }
-});
-
+    
 
     // Socket.IO Connection
     io.on('connection', (socket) => {
