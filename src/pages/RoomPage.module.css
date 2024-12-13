@@ -51,15 +51,31 @@ html, body {
   align-items: center;
 }
 
+/* Base logo style */
 .syncrolly-logo {
   max-width: 60px;
   height: auto;
   margin-right: 0;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s ease, filter 0.3s ease; /* Adding transition for filter */
+  filter: brightness(0) invert(0); /* Default (light) mode */
 }
 
+/* Hover effect */
 .syncrolly-logo:hover {
   transform: scale(1.05);
+}
+
+/* Light mode */
+.room-container.light .syncrolly-logo {
+  filter: brightness(0) invert(0); /* Default color for light mode */
+}
+
+/* Dark mode */
+.room-container.dark .syncrolly-logo {
+  filter: brightness(0) invert(1); /* White logo in dark mode */
+}
+.room-container.dark label{
+  color: #fff;
 }
 
 /* Room Name: Order 2 */
@@ -145,15 +161,26 @@ html, body {
   font-size: 0.95rem;
   transition: background-color 0.3s, transform 0.2s;
 }
-
+.download-btn{
+  padding: 10px 10px;
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.3s, transform 0.2s;
+}
 .chat-btn:hover,
-.files-btn:hover {
+.files-btn:hover,
+.download-btn:hover {
   background-color: #0056b3;
   transform: translateY(-2px);
 }
 
 .chat-btn:active,
-.files-btn:active {
+.files-btn:active,
+.download-btn:active {
   transform: translateY(0);
 }
 
@@ -200,6 +227,9 @@ html, body {
   margin-right: 50px;
   font-size: 14px;
   color: #555;
+}
+.room-container.dark .current-editor-mode {
+  color: #fff;
 }
 
 /* ============================= */
@@ -269,7 +299,7 @@ html, body {
   color: #333;
   font-family: 'Courier New', Courier, monospace;
   overflow: auto;
-  border: 1px solid #e7e7e7;
+  border: .2px solid #605d5d;
   transition: background-color 0.3s, color 0.3s;
 }
 
@@ -279,7 +309,7 @@ html, body {
 }
 
 .code-editor.dark {
-  background-color: #1e1e1e;
+  background-color: #121111;
   color: #d4d4d4;
 }
 
@@ -564,8 +594,52 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 20px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: all 0.3s ease-in-out;
 }
+
+.language-select:hover {
+  background: linear-gradient(45deg, #e6e6e6, #f7f7f7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.room-container.dark .language-select:hover {
+  background: linear-gradient(45deg, #121111, #1e1e1e);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.language-select label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.language-select select {
+  font-size: 14px;
+  padding: 6px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.language-select select:hover {
+  border-color: #888;
+}
+
+.language-select select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.3);
+}
+.room-container.dark .language-select {
+  background-color: #121111;
+  color: #fff;
+}
+
 .chat-btn {
   position: relative;
 }
@@ -605,70 +679,9 @@ html, body {
 /* 10. Responsive Design Adjustments */
 /* ============================= */
 
-/* Medium Screens (769px - 992px) */
-@media (max-width: 769px) {
-  .header {
-    padding: 8px;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .header h1 {
-    font-size: 1rem;
-    margin-bottom: 8px;
-  }
-  .header .chat-toggle,
-  .header .editor-toggle,
-  .header .theme-toggle {
-    font-size: 0.9rem;
-    margin: 4px 0;
-  }
-  .main-content {
-    padding: 8px;
-  }
-
-  .code-editor {
-    height: 55vh;
-  }
-
-  .chat-box {
-    width: 300px;
-  }
-
-  .footer-content {
-    font-size: 13px;
-  }
-
-  .chat-btn,
-  .files-btn,
-  .theme-btn,
-  .submit-btn,
-  .send-btn,
-  .toggle-btn,
-  .delete-btn {
-    font-size: 14px;
-    padding: 10px 20px;
-  }
-
-  .syncrolly-logo {
-    max-width: 70px;
-    max-height: 70px;
-  }
-
-  .theme-toggle {
-    margin-right: 30px;
-  }
-
-  .chat-input {
-    font-size: 15px;
-  }
-
-  .name-input {
-    width: 70%;
-  }
-}
 
 /* Small Screens (Below 768px) */
-@media (max-width: 768px) {
+@media (max-width: 968px) {
   .header {
     padding: 4px 8px;
     flex-direction: column;
@@ -694,6 +707,7 @@ html, body {
   .syncrolly-logo {
     max-width: 35px;
     margin-right: 5px;
+
   }
 
   .chat-btn,
@@ -707,7 +721,10 @@ html, body {
     padding: 3px 6px;
     margin: 2px 0;
   }
-
+.theme-btn{
+  font-size: 1.2rem;
+  padding: 10px ;
+}
   .code-editor,
   .text-editor {
     font-size: 0.85rem;
@@ -720,7 +737,9 @@ html, body {
     width: 100%;
     right: -100%;
   }
-
+  .current-editor-mode{
+    display: none;
+  }
   .chat-box.open {
     right: 0;
   }
@@ -755,8 +774,12 @@ html, body {
     justify-content: center; /* Center all items horizontally */
     padding: 14px 17px; /* Very minimal padding */
     gap: 4px; /* Small gap between items */
+    flex-wrap: wrap; /* Allow items to wrap if necessary */
   }
-
+  .theme-btn{
+    font-size: 1.2rem;
+    padding: 10px ;
+  }
   .syncrolly-logo {
     max-width: 25px;
     margin: 0; /* No extra margin */
@@ -768,43 +791,48 @@ html, body {
     line-height: 1;
   }
 
-  /* Stack or align buttons tightly side by side */
+  /* Make toggle buttons behave responsively */
   .chat-toggle,
   .editor-toggle,
-  .theme-toggle,
-  .current-editor-mode {
+  .theme-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 0;
     padding: 0;
     width: auto;
-    flex-wrap: wrap; /* Allows them to wrap if needed */
+    flex-wrap: wrap; /* Allow buttons to wrap if necessary */
     gap: 3px; /* Small gap between buttons */
   }
+.download-btn {
+  font-size: 0.65rem;
+  padding: 6px 6px;
+  margin: 0; /* Remove extra margins */
+  border-radius: 4px;
+}
+  /* Adjust .toggle-btn size and spacing */
+  .toggle-btn {
+    font-size: 0.65rem;
+    padding: 4px 6px;
+    margin: 0; /* Remove extra margins */
+    border-radius: 4px;
+    text-align: center; /* Center text inside */
+  }
 
-  /* Make all buttons smaller and closer together */
+  /* Make buttons smaller and close together */
   .chat-btn,
   .files-btn,
   .toggle-btn,
   .send-btn,
   .delete-btn,
-  .theme-btn,
   .toggle-editor-btn {
-    font-size: 0.65rem;
-    padding: 4px 6px;
+    font-size: 0.8rem;
+    padding: 8px 8px;
     margin: 0; /* Remove extra margins */
     border-radius: 4px;
   }
 
-  /* Editor mode text smaller, and possibly inline */
-  .current-editor-mode p {
-    margin: 0;
-    font-size: 0.7rem;
-    line-height: 1;
-  }
-
-  /* Adjust main content to start closer to header */
+  /* Adjust content layout */
   .main-content {
     margin-top: 5px; /* Less top margin */
     padding: 6px;
@@ -822,9 +850,6 @@ html, body {
     line-height: 1.2;
   }
 
-  
-
-  
   .contact-link .fa-instagram {
     margin-left: 4px;
   }
