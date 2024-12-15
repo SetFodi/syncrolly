@@ -10,7 +10,7 @@ const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
 require('dotenv').config();
-
+const activeUsersCollection = db.collection('activeUsers');
 const app = express();
 const server = http.createServer(app);
 
@@ -194,164 +194,171 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
 
 
     // Socket.IO Connection
-    io.on('connection', (socket) => {
-      console.log(`User connected: ${socket.id}`);
+   io.on('connection', async (socket) => {
+  console.log(`User connected: ${socket.id}`);
 
-      // Handle room joining
-      socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-        let room = await roomsCollection.findOne({ roomId });
+  // Add the connected user to MongoDB
+  await db.collection('activeUsers').insertOne({ socketId: socket.id, connectedAt: new Date() });
 
-        if (!room) {
-          if (isCreator) {
-            room = {
-              roomId,
-              text: '',
-              messages: [],
-              users: {},
-              theme: 'light',
-              lastActivity: new Date(),
-              creatorId: userId,
-              isEditable: true, // Default to editable
-              editorMode: 'code', // Initialize editor mode to 'code'
-            };
-            await roomsCollection.insertOne(room);
-            console.log(`Room ${roomId} created by ${userName}`);
-          } else {
-            return callback({ error: 'Room does not exist.' });
-          }
-        }
+  // Emit the total connected users count to all clients
+  const totalConnectedUsers = await db.collection('activeUsers').countDocuments();
+  io.emit('status_update', { totalConnectedUsers });
 
-        room.users[userId] = userName;
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { users: room.users, lastActivity: new Date() } }
-        );
+  // Handle room joining
+  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+    let room = await roomsCollection.findOne({ roomId });
 
-        const files = await uploadsCollection.find({ roomId }).toArray();
-        socket.join(roomId);
+    if (!room) {
+      if (isCreator) {
+        room = {
+          roomId,
+          text: '',
+          messages: [],
+          users: {},
+          theme: 'light',
+          lastActivity: new Date(),
+          creatorId: userId,
+          isEditable: true, // Default to editable
+          editorMode: 'code', // Initialize editor mode to 'code'
+        };
+        await roomsCollection.insertOne(room);
+        console.log(`Room ${roomId} created by ${userName}`);
+      } else {
+        return callback({ error: 'Room does not exist.' });
+      }
+    }
 
-        // Send the current room details including isEditable and isCreator
-        callback({
-          success: true,
-          messages: room.messages,
-          theme: room.theme,
-          files,
-          isCreator: room.creatorId === userId, // Determine if the joining user is the creator
-          isEditable: room.isEditable, // Room's editability
-          editorMode: room.editorMode, // Current editor mode
-          // ydocState is now handled by y-websocket server
-        });
+    room.users[userId] = userName;
+    await roomsCollection.updateOne(
+      { roomId },
+      { $set: { users: room.users, lastActivity: new Date() } }
+    );
 
-        console.log(`${userName} (${userId}) joined room ${roomId}`);
-      });
+    const files = await uploadsCollection.find({ roomId }).toArray();
+    socket.join(roomId);
 
-      // Handle toggle_editability
-      socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
-        const room = await roomsCollection.findOne({ roomId });
-        if (!room) {
-          return callback({ error: 'Room not found.' });
-        }
-
-        if (room.creatorId !== userId) {
-          // Only the creator can toggle the editability
-          return callback({ error: 'Only the room creator can toggle the editability.' });
-        }
-
-        const newEditableState = !room.isEditable;
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { isEditable: newEditableState } }
-        );
-
-        // Notify all clients in the room about the updated editable state
-        io.to(roomId).emit('editable_state_changed', { isEditable: newEditableState });
-
-        if (callback) {
-          callback({ success: true, isEditable: newEditableState });
-        }
-      });
-
-      // Handle toggle_editor_mode
-      socket.on('toggle_editor_mode', async ({ roomId, userId }, callback) => {
-        try {
-          const room = await roomsCollection.findOne({ roomId });
-          if (!room) {
-            return callback({ error: 'Room not found.' });
-          }
-
-          // Optionally, restrict who can toggle the editor mode
-          // For example, only the room creator can toggle
-          if (room.creatorId !== userId) {
-            return callback({ error: 'Only the room creator can toggle the editor mode.' });
-          }
-
-          // Toggle the editor mode
-          const newEditorMode = room.editorMode === 'code' ? 'text' : 'code';
-          await roomsCollection.updateOne(
-            { roomId },
-            { $set: { editorMode: newEditorMode, lastActivity: new Date() } }
-          );
-
-          // Emit the updated editor mode to all clients in the room
-          io.to(roomId).emit('editor_mode_changed', { editorMode: newEditorMode });
-
-          console.log(`Room ${roomId} editor mode changed to ${newEditorMode} by user ${userId}`);
-
-          // Optionally, send a success callback
-          if (callback) {
-            callback({ success: true, editorMode: newEditorMode });
-          }
-        } catch (error) {
-          console.error('Error in toggle_editor_mode:', error);
-          if (callback) {
-            callback({ error: 'Internal Server Error' });
-          }
-        }
-      });
-
-      // Handle chat messages
-      socket.on('send_message', async ({ roomId, userId, message }) => {
-        const room = await roomsCollection.findOne({ roomId });
-        if (!room) return;
-
-        const userName = room.users[userId];
-        if (!userName) return;
-
-        const fullMessage = { userName, text: message };
-        room.messages.push(fullMessage);
-
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { messages: room.messages, lastActivity: new Date() } }
-        );
-
-        io.to(roomId).emit('receive_message', fullMessage);
-      });
-
-      // Handle typing indicators
-      socket.on('typing_start', ({ roomId, userId, userName }) => {
-        socket.to(roomId).emit('user_typing', { userId, userName });
-      });
-
-      socket.on('typing_stop', ({ roomId, userId }) => {
-        socket.to(roomId).emit('user_stopped_typing', { userId });
-      });
-
-      // Handle theme changes
-      socket.on('change_theme', async ({ roomId, theme }) => {
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { theme, lastActivity: new Date() } }
-        );
-
-        io.to(roomId).emit('theme_changed', theme);
-      });
-
-      socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-        // Optionally, handle user disconnection from rooms
-      });
+    // Send the current room details including isEditable and isCreator
+    callback({
+      success: true,
+      messages: room.messages,
+      theme: room.theme,
+      files,
+      isCreator: room.creatorId === userId, // Determine if the joining user is the creator
+      isEditable: room.isEditable, // Room's editability
+      editorMode: room.editorMode, // Current editor mode
     });
+
+    console.log(`${userName} (${userId}) joined room ${roomId}`);
+  });
+
+  // Handle toggle_editability
+  socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
+    const room = await roomsCollection.findOne({ roomId });
+    if (!room) {
+      return callback({ error: 'Room not found.' });
+    }
+
+    if (room.creatorId !== userId) {
+      return callback({ error: 'Only the room creator can toggle the editability.' });
+    }
+
+    const newEditableState = !room.isEditable;
+    await roomsCollection.updateOne(
+      { roomId },
+      { $set: { isEditable: newEditableState } }
+    );
+
+    io.to(roomId).emit('editable_state_changed', { isEditable: newEditableState });
+
+    if (callback) {
+      callback({ success: true, isEditable: newEditableState });
+    }
+  });
+
+  // Handle toggle_editor_mode
+  socket.on('toggle_editor_mode', async ({ roomId, userId }, callback) => {
+    try {
+      const room = await roomsCollection.findOne({ roomId });
+      if (!room) {
+        return callback({ error: 'Room not found.' });
+      }
+
+      if (room.creatorId !== userId) {
+        return callback({ error: 'Only the room creator can toggle the editor mode.' });
+      }
+
+      const newEditorMode = room.editorMode === 'code' ? 'text' : 'code';
+      await roomsCollection.updateOne(
+        { roomId },
+        { $set: { editorMode: newEditorMode, lastActivity: new Date() } }
+      );
+
+      io.to(roomId).emit('editor_mode_changed', { editorMode: newEditorMode });
+
+      console.log(`Room ${roomId} editor mode changed to ${newEditorMode} by user ${userId}`);
+
+      if (callback) {
+        callback({ success: true, editorMode: newEditorMode });
+      }
+    } catch (error) {
+      console.error('Error in toggle_editor_mode:', error);
+      if (callback) {
+        callback({ error: 'Internal Server Error' });
+      }
+    }
+  });
+
+  // Handle chat messages
+  socket.on('send_message', async ({ roomId, userId, message }) => {
+    const room = await roomsCollection.findOne({ roomId });
+    if (!room) return;
+
+    const userName = room.users[userId];
+    if (!userName) return;
+
+    const fullMessage = { userName, text: message };
+    room.messages.push(fullMessage);
+
+    await roomsCollection.updateOne(
+      { roomId },
+      { $set: { messages: room.messages, lastActivity: new Date() } }
+    );
+
+    io.to(roomId).emit('receive_message', fullMessage);
+  });
+
+  // Handle typing indicators
+  socket.on('typing_start', ({ roomId, userId, userName }) => {
+    socket.to(roomId).emit('user_typing', { userId, userName });
+  });
+
+  socket.on('typing_stop', ({ roomId, userId }) => {
+    socket.to(roomId).emit('user_stopped_typing', { userId });
+  });
+
+  // Handle theme changes
+  socket.on('change_theme', async ({ roomId, theme }) => {
+    await roomsCollection.updateOne(
+      { roomId },
+      { $set: { theme, lastActivity: new Date() } }
+    );
+
+    io.to(roomId).emit('theme_changed', theme);
+  });
+
+  // When a user disconnects
+  socket.on('disconnect', async () => {
+    console.log(`User disconnected: ${socket.id}`);
+
+    // Remove the user from MongoDB
+    await db.collection('activeUsers').deleteOne({ socketId: socket.id });
+
+    // Emit the updated user count
+    const totalConnectedUsers = await db.collection('activeUsers').countDocuments();
+    io.emit('status_update', { totalConnectedUsers });
+  });
+});
+
 
     // Scheduled Task to Delete Inactive Rooms After 48 Hours (unchanged)
     cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
