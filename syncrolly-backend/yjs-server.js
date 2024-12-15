@@ -26,7 +26,7 @@ const roomData = {};
 // Function to broadcast room data to all connected clients
 function broadcastRoomData() {
   const activeRooms = Object.entries(roomData).map(([roomName, clients]) => ({
-    roomName: roomName || 'Unnamed Room', // Handle unnamed rooms
+    roomName: roomName || 'Unnamed Room',
     clients,
   }));
   const message = JSON.stringify({ type: 'room_data', data: activeRooms });
@@ -43,7 +43,7 @@ function broadcastRoomData() {
 // Handle WebSocket connections
 wss.on('connection', (conn, req) => {
   const url = req.url;
-  const roomName = url.slice(1).split('?')[0] || 'Unnamed Room'; // Extract room name or default
+  const roomName = url.slice(1).split('?')[0] || 'Unnamed Room';
   console.log(`Client connected to room: ${roomName}`);
 
   // Initialize room data if not present
@@ -55,14 +55,18 @@ wss.on('connection', (conn, req) => {
   // Broadcast updated room data
   broadcastRoomData();
 
-  // Keep the connection alive
+  // Keep connection alive with pings
   const keepAliveInterval = setInterval(() => {
     if (conn.readyState === WebSocket.OPEN) {
       conn.ping();
     } else {
       clearInterval(keepAliveInterval);
     }
-  }, 30000); // Ping every 30 seconds
+  }, 25000); // Ping every 25 seconds
+
+  conn.on('pong', () => {
+    console.log(`Pong received from client in room: ${roomName}`);
+  });
 
   // Handle disconnection
   conn.on('close', () => {
@@ -70,13 +74,13 @@ wss.on('connection', (conn, req) => {
     if (roomData[roomName]) {
       roomData[roomName]--;
       if (roomData[roomName] <= 0) {
-        delete roomData[roomName]; // Remove empty rooms
+        delete roomData[roomName];
       }
     }
 
     // Broadcast updated room data
     broadcastRoomData();
-    clearInterval(keepAliveInterval); // Clean up interval
+    clearInterval(keepAliveInterval);
   });
 
   // Setup Yjs WebSocket connection
