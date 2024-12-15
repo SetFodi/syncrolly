@@ -51,26 +51,21 @@ function RoomPage() {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState("js"); // Default to JS
+  const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
   const [showReminder, setShowReminder] = useState(false);
-
-
-
-  
-
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL;
   console.log('Backend URL:', backendUrl);
 
   // Language handling
-  const [currentLanguage, setCurrentLanguage] = useState('javascript');
-
   const languageExtensions = useMemo(() => ({
     javascript: javascript(),
     python: python(),
     cpp: cpp(),
     php: php(),
-    markdown: markdown()
+    markdown: markdown(),
+    json: javascript(), // Fallback to JavaScript for JSON
+    text: markdown(),   // Fallback to Markdown for plain text
   }), []);
 
   // Initialize Yjs document
@@ -249,10 +244,11 @@ function RoomPage() {
       alert('Please enter a valid name.');
     }
   };
+
   const handleDownload = () => {
     // Determine the file content based on the editor mode
-    const content = isCodeMode ? plainText : plainText; // You might want to customize this if there's specific text content for plain text mode
-  
+    const content = plainText; // Both modes use plainText
+
     // Map language to file extension
     const languageFileExtensions = {
       javascript: 'js',
@@ -263,22 +259,20 @@ function RoomPage() {
       json: 'json',
       text: 'txt'
     };
-  
+
     // Get the selected language from your editor's state
     const fileExtension = languageFileExtensions[selectedLanguage] || 'txt'; // Default to 'txt' if no match
-  
+
     // Create a Blob object with the content
     const blob = new Blob([content], { type: 'text/plain' });
-  
+
     // Create a link element and trigger the download
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension based on selectedLanguage
     link.click();
   };
-  
-  
-  
+
   const handleEditableToggle = () => {
     if (!isCreator) return;
     socket.emit('toggle_editability', { roomId, userId: storedUserId }, (response) => {
@@ -304,7 +298,6 @@ function RoomPage() {
       }
     });
   };
-  
 
   const handleSendMessage = () => {
     if (!chatInput.trim()) return;
@@ -362,48 +355,45 @@ function RoomPage() {
     }
   };
 
-const handleDeleteFile = async (fileId) => {
-  try {
-    const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
-      method: 'DELETE',
-      mode: 'cors',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const responseText = await response.text();
-    console.log('Raw server response:', responseText);
-
+  const handleDeleteFile = async (fileId) => {
     try {
-      const data = response.ok ? JSON.parse(responseText) : null;
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
+        method: 'DELETE',
+        mode: 'cors',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (response.ok) {
-        alert('File deleted successfully');
-        setFiles((prevFiles) => prevFiles.filter((file) => file._id !== fileId));
-      } else {
-        const errorData = JSON.parse(responseText);
-        alert(errorData.error || 'Failed to delete file');
+      const responseText = await response.text();
+      console.log('Raw server response:', responseText);
+
+      try {
+        const data = response.ok ? JSON.parse(responseText) : null;
+
+        if (response.ok) {
+          alert('File deleted successfully');
+          setFiles((prevFiles) => prevFiles.filter((file) => file._id !== fileId));
+        } else {
+          const errorData = JSON.parse(responseText);
+          alert(errorData.error || 'Failed to delete file');
+        }
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+        alert('Failed to delete file: ' + responseText);
       }
-    } catch (jsonError) {
-      console.error('JSON parsing error:', jsonError);
-      alert('Failed to delete file: ' + responseText);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('Error deleting file: ' + error.message);
     }
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    alert('Error deleting file: ' + error.message);
-  }
-};
+  };
 
-
-const toggleTheme = () => {
-  const newTheme = theme === 'light' ? 'dark' : 'light';
-  setTheme(newTheme);
-  localStorage.setItem('theme', newTheme);
-};
-
-
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
 
   const toggleChatBox = () => {
     setChatVisible(!chatVisible);
@@ -440,14 +430,14 @@ const toggleTheme = () => {
   };
 
   const editorExtensions = useMemo(() => {
-    const baseExtension = isCodeMode ? languageExtensions[currentLanguage] : markdown();
+    const baseExtension = isCodeMode ? languageExtensions[selectedLanguage] : markdown();
     return [
-      baseExtension,
+      baseExtension || markdown(), // Fallback to markdown if extension is undefined
       EditorView.lineWrapping,
       EditorView.editable.of(isEditable || isCreator),
       yCollab(yText, awareness, {}),
     ];
-  }, [isEditable, isCreator, isCodeMode, yText, awareness, currentLanguage, languageExtensions]);
+  }, [isEditable, isCreator, isCodeMode, yText, awareness, selectedLanguage, languageExtensions]);
 
   const debouncedUpdateYjs = useMemo(() => debounce((value) => {
     if (value !== yText.toString()) {
@@ -542,9 +532,9 @@ const toggleTheme = () => {
               <button onClick={() => setFilesModalVisible(true)} className={styles['files-btn']}>
                 View Files
               </button>
-  <button onClick={handleDownload} className={styles['download-btn']}>
-    Download
-  </button>
+              <button onClick={handleDownload} className={styles['download-btn']}>
+                Download
+              </button>
             </div>
 
             <div className={styles['theme-toggle']}>
@@ -602,20 +592,20 @@ const toggleTheme = () => {
               />
             ) : (
               <>
-              <textarea
-                value={plainText}
-                onChange={handlePlainTextChange}
-                onBlur={handleTypingStop}
-                className={`${styles['text-editor']} ${styles[theme]}`}
-                placeholder="Start typing..."
-                disabled={!isEditable && !isCreator}
-                onFocus={handleTypingStart}
-              />
-              {showReminder && (
-        <div className={styles['editor-reminder']}>
-          <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
-        </div>
-      )}
+                <textarea
+                  value={plainText}
+                  onChange={handlePlainTextChange}
+                  onBlur={handleTypingStop}
+                  className={`${styles['text-editor']} ${styles[theme]}`}
+                  placeholder="Start typing..."
+                  disabled={!isEditable && !isCreator}
+                  onFocus={handleTypingStart}
+                />
+                {showReminder && (
+                  <div className={styles['editor-reminder']}>
+                    <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
+                  </div>
+                )}
               </>
             )}
           </div>
