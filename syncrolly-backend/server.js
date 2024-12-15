@@ -10,7 +10,6 @@ const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
 require('dotenv').config();
-const activeUsersCollection = db.collection('activeUsers');
 const app = express();
 const server = http.createServer(app);
 
@@ -88,6 +87,7 @@ async function startServer() {
     const db = client.db('syncrolly');
     roomsCollection = db.collection('rooms');
     uploadsCollection = db.collection('uploads');
+    const activeUsersCollection = db.collection('activeUsers');
 
     const io = new Server(server, {
       cors: {
