@@ -1,5 +1,3 @@
-// yjs-server.js
-
 const http = require('http');
 const WebSocket = require('ws');
 const setupWSConnection = require('y-websocket/bin/utils.js').setupWSConnection;
@@ -28,7 +26,7 @@ const roomData = {};
 // Function to broadcast room data to all connected clients
 function broadcastRoomData() {
   const activeRooms = Object.entries(roomData).map(([roomName, clients]) => ({
-    roomName,
+    roomName: roomName || 'Unnamed Room', // Handle unnamed rooms
     clients,
   }));
   const message = JSON.stringify({ type: 'room_data', data: activeRooms });
@@ -45,7 +43,7 @@ function broadcastRoomData() {
 // Handle WebSocket connections
 wss.on('connection', (conn, req) => {
   const url = req.url;
-  const roomName = url.slice(1).split('?')[0]; // Extract room name from URL
+  const roomName = url.slice(1).split('?')[0] || 'Unnamed Room'; // Extract room name or default
   console.log(`Client connected to room: ${roomName}`);
 
   // Initialize room data if not present
@@ -56,6 +54,15 @@ wss.on('connection', (conn, req) => {
 
   // Broadcast updated room data
   broadcastRoomData();
+
+  // Keep the connection alive
+  const keepAliveInterval = setInterval(() => {
+    if (conn.readyState === WebSocket.OPEN) {
+      conn.ping();
+    } else {
+      clearInterval(keepAliveInterval);
+    }
+  }, 30000); // Ping every 30 seconds
 
   // Handle disconnection
   conn.on('close', () => {
@@ -69,6 +76,7 @@ wss.on('connection', (conn, req) => {
 
     // Broadcast updated room data
     broadcastRoomData();
+    clearInterval(keepAliveInterval); // Clean up interval
   });
 
   // Setup Yjs WebSocket connection
