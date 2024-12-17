@@ -434,7 +434,8 @@ async function startServer() {
     cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
       try {
         const now = new Date();
-        const cutoffTime = new Date(now.getTime() - 48 * 60 * 60 * 1000); // 48 hours ago
+       const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
+
 
         console.log(`Running scheduled task to delete inactive rooms. Current time: ${now}`);
 
