@@ -1,67 +1,65 @@
-/* HomePage.module.css */
-
-/* ============================= */
+/* ============================== */
 /* 1. General Container */
-/* ============================= */
+/* ============================== */
 .home-container {
-  text-align: center;
-  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   min-height: 100vh;
-  font-family: 'Roboto', sans-serif;
+  padding: 40px;
+  font-family: 'Poppins', sans-serif; /* Modern font */
   transition: background-color 0.3s ease, color 0.3s ease;
+  background-color: #f9f9f9;
+  color: #333;
 }
 
-/* Light Theme Styles */
 .home-container.light {
-  background-color: #f9f9f9; /* Light background */
-  color: #333; /* Dark text color */
+  background-color: #f9f9f9;
+  color: #333;
 }
 
-/* Dark Theme Styles */
 .home-container.dark {
-  background-color: #121111; /* Dark background */
-  color: #f9f9f9; /* Light text color */
+  background-color: #121212;
+  color: #f9f9f9;
 }
 
-/* ============================= */
+/* ============================== */
 /* 2. Logo Container */
-/* ============================= */
+/* ============================== */
 .logo-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: 40px;
 }
 
-/* Logo Styling */
 .syncrolly-logo {
-  max-width: 200px;
-  max-height: 200px;
-  border-radius: 10px;
+  max-width: 250px;
+  max-height: 250px;
+  border-radius: 15px;
   transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-}
-
-/* Ensure logo visibility in dark mode */
-.home-container.dark .syncrolly-logo {
   filter: invert(1) brightness(2);
 }
 
-.syncrolly-logo:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+.home-container.dark .syncrolly-logo {
+  filter: invert(1) brightness(1.5);
 }
 
-/* ============================= */
+.syncrolly-logo:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================== */
 /* 3. Heading Styles */
-/* ============================= */
+/* ============================== */
 h1 {
-  font-size: 2.5rem;
-  margin-bottom: 15px;
+  font-size: 3rem;
   font-weight: 600;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
   color: inherit;
+  text-align: center;
 }
 
 .home-container.light h1 {
@@ -72,15 +70,16 @@ h1 {
   color: #f9f9f9;
 }
 
-/* ============================= */
+/* ============================== */
 /* 4. Paragraph Styles */
-/* ============================= */
+/* ============================== */
 p {
-  font-size: 1.25rem;
-  margin-bottom: 30px;
-  font-weight: 400;
-  line-height: 1.6;
+  font-size: 1.4rem;
+  font-weight: 300;
+  margin-bottom: 40px;
   color: inherit;
+  line-height: 1.7;
+  text-align: center;
 }
 
 .home-container.light p {
@@ -91,50 +90,50 @@ p {
   color: #f9f9f9;
 }
 
-/* ============================= */
+/* ============================== */
 /* 5. Create Room Button */
-/* ============================= */
+/* ============================== */
 .create-room-btn {
-  padding: 12px 30px;
+  padding: 15px 35px;
   background-color: #007bff;
   color: white;
   font-size: 1.1rem;
-  font-weight: 500;
+  font-weight: 600;
   border: none;
-  border-radius: 25px;
+  border-radius: 30px;
   cursor: pointer;
   transition: background-color 0.3s, transform 0.2s ease-in-out, box-shadow 0.3s;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-top: 30px;
 }
 
 .create-room-btn:hover {
   background-color: #0056b3;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .create-room-btn:active {
-  transform: translateY(1px);
+  transform: translateY(2px);
   box-shadow: none;
 }
 
-/* ============================= */
+/* ============================== */
 /* 6. Single Theme Toggle */
-/* ============================= */
+/* ============================== */
 .theme-toggle {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 30px;
 }
 
 .theme-btn {
   background-color: transparent;
   border: none;
   cursor: pointer;
-  font-size: 1.5rem;
+  font-size: 2rem;
   color: inherit;
-  transition: color 0.3s, transform 0.3s;
+  transition: color 0.3s, transform 0.3s ease;
 }
 
 .theme-btn:hover {
@@ -146,46 +145,45 @@ p {
   outline: none;
 }
 
-/* ============================= */
+/* ============================== */
 /* 7. Footer */
-/* ============================= */
+/* ============================== */
 .footer {
-  background-color: #f8f9fa; /* Light gray background */
-  padding: 20px;
+  background-color: #f8f9fa;
+  padding: 30px 20px;
   text-align: center;
-  border-top: 1px solid #e7e7e7;
-  margin-top: 40px; /* Space above the footer */
-}
-
-.footer-content {
-  max-width: 800px;
-  margin: 0 auto;
-  font-size: 14px;
-  color: #555;
+  margin-top: 50px;
+  border-radius: 15px;
 }
 
 .home-container.dark .footer {
-  background-color: #121111; /* Dark background for footer */
-  color: #fff; /* White text */
+  background-color: #121212;
+  color: #fff;
+}
+
+.footer-content {
+  max-width: 900px;
+  margin: 0 auto;
+  font-size: 15px;
+  color: #555;
 }
 
 .footer-content p {
-  margin: 5px 0;
+  margin: 10px 0;
 }
 
 .contact-link {
-  color: #E1306C; /* Instagram's brand color */
+  color: #E1306C;
+  font-weight: 600;
   text-decoration: none;
-  font-weight: bold;
   transition: color 0.3s ease;
 }
 
 .contact-link:hover {
-  color: #C13584; /* Darker shade on hover */
+  color: #C13584;
 }
 
 .contact-link .fa-instagram {
-  color: #E1306C;
   transition: transform 0.3s ease;
 }
 
@@ -193,24 +191,43 @@ p {
   transform: scale(1.2);
 }
 
-.contact-link:focus {
-  outline: 2px dashed #333;
-  outline-offset: 4px;
-}
-
-/* ============================= */
+/* ============================== */
 /* 8. Responsive Design */
-/* ============================= */
+/* ============================== */
 
 /* Medium Screens (769px - 992px) */
 @media (min-width: 769px) and (max-width: 992px) {
   .syncrolly-logo {
-    max-width: 150px;
-    max-height: 150px;
+    max-width: 200px;
+    max-height: 200px;
   }
 
   h1 {
-    font-size: 2.2rem;
+    font-size: 2.5rem;
+  }
+
+  p {
+    font-size: 1.2rem;
+  }
+
+  .create-room-btn {
+    padding: 12px 28px;
+    font-size: 1.1rem;
+  }
+
+  .footer-content {
+    font-size: 14px;
+  }
+}
+
+/* Small Screens (Below 768px) */
+@media (max-width: 768px) {
+  .logo-container {
+    margin-bottom: 30px;
+  }
+
+  h1 {
+    font-size: 2rem;
   }
 
   p {
@@ -218,82 +235,40 @@ p {
   }
 
   .create-room-btn {
-    padding: 10px 25px;
-    font-size: 1rem;
+    padding: 12px 30px;
+    font-size: 1.1rem;
   }
 
   .footer-content {
-    font-size: 13px;
-  }
-}
-
-/* Small Screens (Below 768px) */
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .logo-container {
-    margin-bottom: 15px;
-  }
-
-  h1 {
-    font-size: 1.8rem;
-    margin-left: 0;
-  }
-
-  p {
-    font-size: 1rem;
-  }
-
-  .create-room-btn {
-    padding: 10px 25px;
-    font-size: 1rem;
-  }
-
-  .theme-toggle {
-    margin-top: 15px;
-  }
-
-  .theme-btn {
-    font-size: 1.3rem;
-  }
-
-  .footer-content {
-    font-size: 13px;
+    font-size: 14px;
   }
 }
 
 /* Extra Small Screens (Below 480px) */
 @media (max-width: 480px) {
   .syncrolly-logo {
-    max-width: 120px;
-    max-height: 120px;
+    max-width: 150px;
+    max-height: 150px;
   }
 
   h1 {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 
   p {
-    font-size: 0.9rem;
+    font-size: 1rem;
   }
 
   .create-room-btn {
-    padding: 8px 20px;
-    font-size: 0.9rem;
+    padding: 10px 25px;
+    font-size: 1rem;
   }
 
   .theme-btn {
-    font-size: 1.2rem;
+    font-size: 1.6rem;
   }
 
   .footer-content {
-    font-size: 12px;
-  }
-
-  .contact-link .fa-instagram {
-    margin-left: 5px;
+    font-size: 13px;
   }
 }
