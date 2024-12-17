@@ -482,6 +482,11 @@ function RoomPage() {
     <div className={styles['loading-container']}>
       <div className={styles['spinner']}></div>
       <p>Loading...</p>
+          {!isNameSet && (
+      <p className={styles['loading-message']}>
+        {`If this is the first time creating the room, it may take up to 15 seconds. Subsequent loads will be faster.`}
+      </p>
+      )}
     </div>
   ) : (
     <div className={`${styles['room-container']} ${styles[theme]}`}>
