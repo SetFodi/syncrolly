@@ -27,6 +27,13 @@ html, body {
   background-color: #121111;
   color: #fff;
 }
+/* Add this to your RoomPage.module.css */
+.loading-message {
+  font-size: 0.9rem;
+  color: #888;
+  margin-top: 10px;
+  text-align: center;
+}
 
 /* ============================= */
 /* 2. Header */
