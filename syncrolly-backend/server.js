@@ -9,10 +9,16 @@ const { MongoClient, ObjectId } = require('mongodb');
 const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const { setupWSConnection } = require('y-websocket/bin/utils.js');
+const { LeveldbPersistence } = require('y-leveldb');
+const WebSocket = require('ws');
+const url = require('url');
+const Y = require('yjs');
+
+dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
 
 // =====================
 // ===== CORS Setup =====
@@ -39,14 +45,14 @@ app.options('*', (req, res) => {
 });
 
 // ==========================
-// ===== Middleware Setup =====
-// ==========================
+# ===== Middleware Setup =====
+# ==========================
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =========================
-// ===== MongoDB Setup =====
-// =========================
+# ===== MongoDB Setup =====
+# =========================
 const MONGO_URI = process.env.MONGO_URI;
 const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
@@ -88,8 +94,8 @@ const upload = multer({
 });
 
 // ============================
-// ===== Socket.IO Setup =====
-// ============================
+# ===== Socket.IO Setup =====
+# ============================
 const socketUserMap = new Map(); // Map to store socket.id => { userId, roomId }
 
 async function startServer() {
@@ -103,6 +109,12 @@ async function startServer() {
     activeUsersCollection = db.collection('activeUsers'); // Initialize activeUsersCollection
 
     // Initialize Socket.IO
+    const server = http.createServer(app);
+
+    // Initialize the WebSocket server instance for Yjs
+    const wss = new WebSocket.Server({ server });
+
+    // Initialize Socket.IO with Express server
     const io = new Server(server, {
       cors: {
         origin: allowedFrontendUrl,
@@ -111,8 +123,8 @@ async function startServer() {
     });
 
     // =======================
-    // ===== File Routes =====
-    // =======================
+    # ===== File Routes =====
+    # =======================
 
     // File Upload Route
     app.post('/upload/:roomId', upload.single('file'), async (req, res) => {
@@ -211,8 +223,8 @@ async function startServer() {
     });
 
     // ========================
-    // ===== Socket.IO Events =====
-    // ========================
+    # ===== Socket.IO Events =====
+    # ========================
     io.on('connection', async (socket) => {
       console.log(`User connected: ${socket.id}`);
 
@@ -429,8 +441,8 @@ async function startServer() {
     });
 
     // ================================
-    // ===== Scheduled Cleanup Task =====
-    // ================================
+    # ===== Scheduled Cleanup Task =====
+    # ================================
     cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
       try {
         const now = new Date();
@@ -490,11 +502,54 @@ async function startServer() {
     });
 
     // ======================
-    // ===== Start Server =====
+    # ===== Yjs WebSocket Setup =====
+    # ======================
+
+    // Define the persistence directory
+    const persistenceDir = path.join(__dirname, 'yjs-docs');
+
+    // Create the directory if it doesn't exist
+    if (!fs.existsSync(persistenceDir)) {
+      fs.mkdirSync(persistenceDir);
+    }
+
+    // Initialize LevelDB Persistence
+    const persistence = new LeveldbPersistence(persistenceDir);
+
+    // Initialize the WebSocket server instance for Yjs
+    const yjsWss = new WebSocket.Server({ server, path: '/yjs' });
+
+    // Handle Yjs WebSocket connections
+    yjsWss.on('connection', (conn, req) => {
+      const parsedUrl = url.parse(req.url, true);
+      const roomName = parsedUrl.pathname.replace('/yjs', '') || 'Unnamed Room';
+      console.log(`Yjs Client connected to room: ${roomName}`);
+
+      // Setup Yjs WebSocket connection with LevelDB Persistence
+      setupWSConnection(conn, req, {
+        docName: roomName,
+        persistence,
+        gc: true, // garbage collect
+      });
+
+      // After setupWSConnection, get the Yjs document and attach an observer
+      persistence.getYDoc(roomName).then((ydoc) => {
+        ydoc.on('update', (update, origin) => {
+          console.log(`Document for room ${roomName} updated`);
+          // Additional logic if needed
+        });
+      }).catch(err => {
+        console.error(`Error getting YDoc for room ${roomName}:`, err);
+      });
+    });
+
     // ======================
+    # ===== Start Server =====
+    # ======================
     const PORT = process.env.PORT || 4000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
+      console.log(`Yjs WebSocket server is running on ws://localhost:${PORT}/yjs`);
     });
   } catch (error) {
     console.error('Error starting server:', error);
