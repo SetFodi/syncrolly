@@ -550,6 +550,7 @@ function RoomPage() {
                   extensions={editorExtensions}
                   className={`${styles['code-editor']} ${styles[theme]}`}
                   readOnly={!(isEditable || isCreator)}
+                  aria-label="Code Editor"
                 />
               ) : (
                 <div className={styles['yjs-loading']}>
@@ -557,27 +558,13 @@ function RoomPage() {
                 </div>
               )
             ) : (
-              isYjsSynced ? ( // Only render textarea when Yjs is synced
-                <>
-                  <textarea
-                    value={ydoc.getText('shared-text').toString()}
-                    onChange={(e) => {
-                      // No manual state update; yCollab handles it
-                      handleTypingStart();
-                    }}
-                    className={`${styles['text-editor']} ${styles[theme]}`}
-                    placeholder="Start typing..."
-                    disabled={!isEditable && !isCreator}
-                    onFocus={handleTypingStart}
-                    onBlur={handleTypingStop}
-                    aria-label="Plain Text Editor"
-                  />
-                  {showReminder && (
-                    <div className={styles['editor-reminder']}>
-                      <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
-                    </div>
-                  )}
-                </>
+              isYjsSynced ? ( // Only render CodeMirror in text mode when Yjs is synced
+                <CodeMirror
+                  extensions={editorExtensions}
+                  className={`${styles['text-editor']} ${styles[theme]}`}
+                  readOnly={!isEditable && !isCreator}
+                  aria-label="Plain Text Editor"
+                />
               ) : (
                 <div className={styles['yjs-loading']}>
                   <p>Synchronizing editor content...</p>
@@ -585,6 +572,12 @@ function RoomPage() {
               )
             )}
           </div>
+
+          {showReminder && (
+            <div className={styles['editor-reminder']}>
+              <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
+            </div>
+          )}
 
           <div className={styles['typing-indicator']}>
             {typingUsers.length > 0 && (
