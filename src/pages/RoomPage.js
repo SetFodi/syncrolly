@@ -79,7 +79,12 @@ function RoomPage() {
 
   useEffect(() => {
     if (isNameSet) {
-      const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
+      // Determine the WebSocket URL
+      // In production, ensure REACT_APP_YJS_WS_URL is set to your server's WebSocket URL, e.g., wss://www.syncrolly.com/yjs
+      // In development, it can default to ws://localhost:4000/yjs
+      const wsUrl = process.env.REACT_APP_YJS_WS_URL || `${window.location.origin.replace(/^http/, 'ws')}/yjs`;
+      console.log('Connecting to Yjs WebSocket at:', wsUrl);
+      
       const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
       setProvider(newProvider);
       setAwareness(newProvider.awareness);
@@ -90,9 +95,20 @@ function RoomPage() {
         console.log(`WebsocketProvider status: ${event.status}`);
         if (event.status === 'connected') {
           setIsYjsSynced(true); // Yjs is synced
+          console.log('Yjs is synced');
         } else {
           setIsYjsSynced(false); // Yjs is disconnected
+          console.log('Yjs is disconnected');
         }
+      });
+
+      // Handle connection errors
+      newProvider.on('connection-error', (error) => {
+        console.error('Yjs WebsocketProvider connection error:', error);
+      });
+
+      newProvider.on('reconnect', () => {
+        console.log('Yjs WebsocketProvider attempting to reconnect...');
       });
 
       return () => {
@@ -544,32 +560,17 @@ function RoomPage() {
           </div>
 
           <div className={styles['main-content']}>
-            {isCodeMode ? (
-              isYjsSynced ? ( // Only render CodeMirror when Yjs is synced
-                <CodeMirror
-                  extensions={editorExtensions}
-                  className={`${styles['code-editor']} ${styles[theme]}`}
-                  readOnly={!(isEditable || isCreator)}
-                  aria-label="Code Editor"
-                />
-              ) : (
-                <div className={styles['yjs-loading']}>
-                  <p>Synchronizing editor content...</p>
-                </div>
-              )
+            {isYjsSynced ? ( // Only render CodeMirror when Yjs is synced
+              <CodeMirror
+                extensions={editorExtensions}
+                className={`${styles['code-editor']} ${styles[theme]}`}
+                readOnly={!(isEditable || isCreator)}
+                aria-label="Code Editor"
+              />
             ) : (
-              isYjsSynced ? ( // Only render CodeMirror in text mode when Yjs is synced
-                <CodeMirror
-                  extensions={editorExtensions}
-                  className={`${styles['text-editor']} ${styles[theme]}`}
-                  readOnly={!isEditable && !isCreator}
-                  aria-label="Plain Text Editor"
-                />
-              ) : (
-                <div className={styles['yjs-loading']}>
-                  <p>Synchronizing editor content...</p>
-                </div>
-              )
+              <div className={styles['yjs-loading']}>
+                <p>Synchronizing editor content...</p>
+              </div>
             )}
           </div>
 
