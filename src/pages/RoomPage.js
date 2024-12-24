@@ -80,9 +80,9 @@ function RoomPage() {
   useEffect(() => {
     if (isNameSet) {
       // Determine the WebSocket URL
-      // In production, ensure REACT_APP_YJS_WS_URL is set to your server's WebSocket URL, e.g., wss://www.syncrolly.com/yjs
-      // In development, it can default to ws://localhost:4000/yjs
-      const wsUrl = process.env.REACT_APP_YJS_WS_URL || `${window.location.origin.replace(/^http/, 'ws')}/yjs`;
+      // In production, ensure REACT_APP_YJS_WS_URL is set to your yjs-server.js URL, e.g., ws://yourdomain.com:1234
+      // In development, it can default to ws://localhost:1234
+      const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
       console.log('Connecting to Yjs WebSocket at:', wsUrl);
       
       const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
