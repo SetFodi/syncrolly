@@ -11,15 +11,14 @@ import { EditorView } from '@codemirror/view';
 import styles from './RoomPage.module.css';
 import FilesModal from './FilesModal';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import * as Y from 'yjs'; // Import Yjs
-import { WebsocketProvider } from 'y-websocket'; // Yjs WebSocket Provider
+import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
 import { yCollab } from 'y-codemirror.next'; // Yjs extension for CodeMirror
 
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { php } from '@codemirror/lang-php';
 
-function RoomPage() {
+function RoomPageContent() {
   const { roomId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -67,65 +66,10 @@ function RoomPage() {
     text: markdown(),   // Fallback to Markdown for plain text
   }), []);
 
-  // Initialize Yjs document
-  const ydoc = useMemo(() => new Y.Doc(), []);
+  // Access Yjs context
+  const { ydoc, awareness, isYjsSynced } = useYjs();
 
-  // Initialize WebsocketProvider and Awareness
-  const [provider, setProvider] = useState(null);
-  const [awareness, setAwareness] = useState(null);
-
-  // State to track if Yjs is synchronized
-  const [isYjsSynced, setIsYjsSynced] = useState(false);
-
-  useEffect(() => {
-    if (isNameSet) {
-      // Determine the WebSocket URL
-      // In production, ensure REACT_APP_YJS_WS_URL is set to your yjs-server.js URL, e.g., ws://yourdomain.com:1234
-      // In development, it can default to ws://localhost:1234
-      const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
-      console.log('Connecting to Yjs WebSocket at:', wsUrl);
-      
-      const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
-      setProvider(newProvider);
-      setAwareness(newProvider.awareness);
-      console.log('Connected to Yjs WebsocketProvider');
-
-      // Listen to provider status to determine when it's synced
-      newProvider.on('status', event => {
-        console.log(`WebsocketProvider status: ${event.status}`);
-        if (event.status === 'connected') {
-          setIsYjsSynced(true); // Yjs is synced
-          console.log('Yjs is synced');
-        } else {
-          setIsYjsSynced(false); // Yjs is disconnected
-          console.log('Yjs is disconnected');
-        }
-      });
-
-      // Handle connection errors
-      newProvider.on('connection-error', (error) => {
-        console.error('Yjs WebsocketProvider connection error:', error);
-      });
-
-      newProvider.on('reconnect', () => {
-        console.log('Yjs WebsocketProvider attempting to reconnect...');
-      });
-
-      return () => {
-        newProvider.destroy();
-        setAwareness(null);
-        setIsYjsSynced(false);
-        console.log('Disconnected from Yjs WebsocketProvider');
-      };
-    }
-  }, [isNameSet, roomId, ydoc]);
-
-  useEffect(() => {
-    if (!isNameSet) {
-      setLoading(false);
-    }
-  }, [isNameSet]);
-
+  // Initialize Socket.IO Events
   useEffect(() => {
     if (isNameSet) {
       setLoading(true);
@@ -216,6 +160,7 @@ function RoomPage() {
     chatVisible,
   ]);
 
+  // Handle Awareness State
   useEffect(() => {
     if (isNameSet && awareness) {
       awareness.setLocalStateField('user', {
@@ -243,8 +188,7 @@ function RoomPage() {
     }
   }, [isNameSet, userName, awareness, storedUserId]);
 
-  // Removed manual Yjs document handling to rely solely on yCollab
-
+  // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
       console.log('Setting user name:', userName);
@@ -255,6 +199,7 @@ function RoomPage() {
     }
   };
 
+  // Handle Download
   const handleDownload = () => {
     // Determine the file content based on the editor mode
     const content = ydoc.getText('shared-text').toString(); // Get content from Yjs document
@@ -283,6 +228,7 @@ function RoomPage() {
     link.click();
   };
 
+  // Handle Editable Toggle
   const handleEditableToggle = () => {
     if (!isCreator) return;
     socket.emit('toggle_editability', { roomId, userId: storedUserId }, (response) => {
@@ -294,6 +240,7 @@ function RoomPage() {
     });
   };
 
+  // Handle Editor Mode Toggle
   const handleToggleEditorMode = () => {
     socket.emit('toggle_editor_mode', { roomId, userId: storedUserId }, (response) => {
       if (response.error) {
@@ -309,12 +256,14 @@ function RoomPage() {
     });
   };
 
+  // Handle Sending Messages
   const handleSendMessage = () => {
     if (!chatInput.trim()) return;
     socket.emit('send_message', { roomId, userId: storedUserId, message: chatInput });
     setChatInput('');
   };
 
+  // Handle File Upload
   const handleFileUpload = async () => {
     if (!fileInput) {
       alert('Please select a file to upload.');
@@ -365,6 +314,7 @@ function RoomPage() {
     }
   };
 
+  // Handle File Deletion
   const handleDeleteFile = async (fileId) => {
     try {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
@@ -399,12 +349,14 @@ function RoomPage() {
     }
   };
 
+  // Toggle Theme
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
   };
 
+  // Toggle Chat Box
   const toggleChatBox = () => {
     setChatVisible(!chatVisible);
     if (!chatVisible) {
@@ -413,6 +365,7 @@ function RoomPage() {
     console.log('Yjs Document Content:', ydoc.getText('shared-text').toString());
   };
 
+  // Handle Typing Start
   const handleTypingStart = () => {
     if (!isTyping) {
       socket.emit('typing_start', { roomId, userId: storedUserId, userName });
@@ -428,6 +381,7 @@ function RoomPage() {
     }, 3000);
   };
 
+  // Handle Typing Stop
   const handleTypingStop = () => {
     if (isTyping) {
       socket.emit('typing_stop', { roomId, userId: storedUserId });
@@ -439,6 +393,7 @@ function RoomPage() {
     }
   };
 
+  // Editor Extensions
   const editorExtensions = useMemo(() => {
     const baseExtension = isCodeMode ? languageExtensions[selectedLanguage] : markdown();
     return [
@@ -449,15 +404,7 @@ function RoomPage() {
     ];
   }, [isEditable, isCreator, isCodeMode, awareness, selectedLanguage, languageExtensions, ydoc]);
 
-  return loading ? (
-    <div className={styles['loading-container']}>
-      <div className={styles['spinner']}></div>
-      <p>Loading...</p>
-      <p className={styles['loading-message']}>
-        {`If this is the first time creating the room, it may take up to 15 seconds. Subsequent loads will be faster.`}
-      </p>
-    </div>
-  ) : (
+  return (
     <div className={`${styles['room-container']} ${styles[theme]}`}>
       {!isNameSet ? (
         <div className={styles['name-setup']}>
@@ -494,6 +441,7 @@ function RoomPage() {
                 className={`${styles['toggle-btn']} ${isEditable ? styles['editable'] : styles['viewOnly']}`}
                 aria-label={isEditable ? 'Set to View-Only' : 'Make Editable'}
               >
+                <span className="icon"></span>
                 {isEditable ? "Set to View-Only" : "Make Editable"}
               </button>
             )}
@@ -534,7 +482,7 @@ function RoomPage() {
             {/* Language Selector after the editor-toggle */}
             {isCodeMode && (
               <div className={styles['language-select']}>
-                <label htmlFor="language-select" style={{ marginRight: '8px' }}>Language:</label>
+                <label htmlFor="language-select">Language:</label>
                 <select
                   id="language-select"
                   value={selectedLanguage}
@@ -650,6 +598,15 @@ function RoomPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function RoomPage() {
+  const { roomId } = useParams();
+  return (
+    <YjsProvider roomId={roomId}>
+      <RoomPageContent />
+    </YjsProvider>
   );
 }
 
