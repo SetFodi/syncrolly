@@ -10,11 +10,6 @@ const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
 const dotenv = require('dotenv');
-const { setupWSConnection } = require('y-websocket/bin/utils.js');
-const { LeveldbPersistence } = require('y-leveldb');
-const WebSocket = require('ws');
-const url = require('url');
-const Y = require('yjs');
 
 dotenv.config();
 
@@ -23,13 +18,13 @@ const app = express();
 // =====================
 // ===== CORS Setup =====
 // =====================
-const allowedFrontendUrl = (process.env.FRONTEND_URLS || 'http://localhost:3000,https://www.syncrolly.com/')
+const allowedFrontendUrls = (process.env.FRONTEND_URLS || 'http://localhost:3000,https://www.syncrolly.com')
   .split(',')
   .map(url => url.trim());
 
 // Ensure CORS is defined before any routes or middleware
 app.use(cors({
-  origin: allowedFrontendUrl, // Allow specific frontend URLs
+  origin: allowedFrontendUrls, // Allow specific frontend URLs
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
   allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
   credentials: true, // Allow credentials if needed
@@ -37,22 +32,22 @@ app.use(cors({
 
 // Preflight handling (applicable for DELETE and POST requests)
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', allowedFrontendUrl.join(',')); // Allow specified origins
+  res.header('Access-Control-Allow-Origin', allowedFrontendUrls.join(',')); // Allow specified origins
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
   res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
   res.sendStatus(200); // Respond OK to preflight
 });
 
-// ==========================
-# ===== Middleware Setup =====
-# ==========================
+// =========================
+// ===== Middleware Setup =====
+// =========================
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =========================
-# ===== MongoDB Setup =====
-# =========================
+// ===== MongoDB Setup =====
+// =========================
 const MONGO_URI = process.env.MONGO_URI;
 const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
@@ -61,14 +56,15 @@ let uploadsCollection;
 let activeUsersCollection;
 
 // Ensure 'uploads' directory exists
-if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads'));
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
 }
 
 // Set up file storage using multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
@@ -108,16 +104,13 @@ async function startServer() {
     uploadsCollection = db.collection('uploads');
     activeUsersCollection = db.collection('activeUsers'); // Initialize activeUsersCollection
 
-    // Initialize Socket.IO
+    // Initialize HTTP server
     const server = http.createServer(app);
-
-    // Initialize the WebSocket server instance for Yjs
-    const wss = new WebSocket.Server({ server });
 
     // Initialize Socket.IO with Express server
     const io = new Server(server, {
       cors: {
-        origin: allowedFrontendUrl,
+        origin: allowedFrontendUrls,
         methods: ['GET', 'POST'],
       },
     });
@@ -186,19 +179,19 @@ async function startServer() {
         const { roomId, fileId } = req.params;
 
         if (!ObjectId.isValid(fileId)) {
-          res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+          res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
           return res.status(400).json({ error: 'Invalid file ID format.' });
         }
 
         const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
 
         if (!fileToDelete) {
-          res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+          res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
           return res.status(404).json({ error: 'File not found.' });
         }
 
         const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
-        const filePath = path.join(__dirname, 'uploads', fileToDelete.fileUrl.split('/').pop());
+        const filePath = path.join(uploadsDir, path.basename(fileToDelete.fileUrl));
 
         fs.unlink(filePath, (err) => {
           if (err) {
@@ -208,7 +201,7 @@ async function startServer() {
           }
         });
 
-        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
         res.status(200).json({
           success: true,
           message: 'File deleted successfully',
@@ -217,7 +210,7 @@ async function startServer() {
       } catch (error) {
         console.error('Error in file deletion:', error);
 
-        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrl.join(','));
+        res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
       }
     });
@@ -469,7 +462,7 @@ async function startServer() {
           // Delete files from the filesystem
           for (const file of associatedFiles) {
             const filename = path.basename(file.fileUrl);
-            const filePath = path.join(__dirname, 'uploads', filename);
+            const filePath = path.join(uploadsDir, filename);
 
             fs.unlink(filePath, (err) => {
               if (err) {
@@ -502,54 +495,11 @@ async function startServer() {
     });
 
     // ======================
-    # ===== Yjs WebSocket Setup =====
-    # ======================
-
-    // Define the persistence directory
-    const persistenceDir = path.join(__dirname, 'yjs-docs');
-
-    // Create the directory if it doesn't exist
-    if (!fs.existsSync(persistenceDir)) {
-      fs.mkdirSync(persistenceDir);
-    }
-
-    // Initialize LevelDB Persistence
-    const persistence = new LeveldbPersistence(persistenceDir);
-
-    // Initialize the WebSocket server instance for Yjs
-    const yjsWss = new WebSocket.Server({ server, path: '/yjs' });
-
-    // Handle Yjs WebSocket connections
-    yjsWss.on('connection', (conn, req) => {
-      const parsedUrl = url.parse(req.url, true);
-      const roomName = parsedUrl.pathname.replace('/yjs', '') || 'Unnamed Room';
-      console.log(`Yjs Client connected to room: ${roomName}`);
-
-      // Setup Yjs WebSocket connection with LevelDB Persistence
-      setupWSConnection(conn, req, {
-        docName: roomName,
-        persistence,
-        gc: true, // garbage collect
-      });
-
-      // After setupWSConnection, get the Yjs document and attach an observer
-      persistence.getYDoc(roomName).then((ydoc) => {
-        ydoc.on('update', (update, origin) => {
-          console.log(`Document for room ${roomName} updated`);
-          // Additional logic if needed
-        });
-      }).catch(err => {
-        console.error(`Error getting YDoc for room ${roomName}:`, err);
-      });
-    });
-
-    // ======================
     # ===== Start Server =====
     # ======================
     const PORT = process.env.PORT || 4000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
-      console.log(`Yjs WebSocket server is running on ws://localhost:${PORT}/yjs`);
     });
   } catch (error) {
     console.error('Error starting server:', error);
