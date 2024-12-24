@@ -70,95 +70,55 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-    if (isNameSet) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+useEffect(() => {
+  if (isNameSet) {
+    setLoading(true);
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          setIsCodeMode(response.editorMode === 'code');
-          console.log('Initial isEditable state:', response.isEditable);
-          console.log('Initial editor mode:', response.editorMode);
-          setLoading(false);
-        }
-      });
+    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+      console.log('join_room response:', response);
+      if (response.error) {
+        alert(response.error);
+        setLoading(false);
+        return;
+      }
+      if (response.success) {
+        console.log('Joined room successfully:', response);
+        setFiles(response.files);
+        setMessages(response.messages);
+        setIsEditable(response.isEditable);
+        setIsCreator(response.isCreator);
+        setIsCodeMode(response.editorMode === 'code');
+        console.log('Initial isEditable state:', response.isEditable);
+        console.log('Initial editor mode:', response.editorMode);
+        setLoading(false);
+      }
+    });
 
-      socket.on('new_file', (newFile) => {
-        setFiles((prevFiles) => [...prevFiles, newFile]);
-      });
-
-      socket.on('receive_message', (message) => {
-        setMessages((prev) => [...prev, message]);
-        if (!chatVisible) {
-          setHasUnreadMessages(true);
-        }
-      });
-
-      socket.on('user_typing', (data) => {
-        setTypingUsers((prev) => {
-          const userExists = prev.some((user) => user.userId === data.userId);
-          if (userExists) {
-            return prev;
-          }
-          return [...prev, data];
-        });
-      });
-
-      socket.on('user_stopped_typing', (data) => {
-        setTypingUsers((prev) => prev.filter((user) => user.userId !== data.userId));
-      });
-
-      socket.on('editor_mode_changed', ({ editorMode }) => {
-        console.log('Editor mode changed to:', editorMode);
-        setIsCodeMode(editorMode === 'code');
-      });
-
-      socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
-        console.log('Editable state changed:', newIsEditable);
-        setIsEditable(newIsEditable);
-      });
-
-      socket.on('theme_changed', (newTheme) => {
-        setTheme(newTheme);
-      });
-
-      socket.on('room_deleted', ({ message }) => {
+    socket.on('room_deleted', ({ message, deleteAfter }) => {
+      if (deleteAfter && new Date() > new Date(deleteAfter)) {
         alert(message);
+        // You can also clear the content here if you want to sync with the deletion
+        ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
         navigate('/');
-      });
+      } else {
+        alert(message);
+      }
+    });
 
-      return () => {
-        socket.off('new_file');
-        socket.off('receive_message');
-        socket.off('user_typing');
-        socket.off('user_stopped_typing');
-        socket.off('editor_mode_changed');
-        socket.off('editable_state_changed');
-        socket.off('theme_changed');
-        socket.off('room_deleted');
-      };
-    }
-  }, [
-    isNameSet,
-    roomId,
-    storedUserName,
-    storedUserId,
-    isCreator,
-    navigate,
-    chatVisible,
-  ]);
+    return () => {
+      socket.off('new_file');
+      socket.off('receive_message');
+      socket.off('user_typing');
+      socket.off('user_stopped_typing');
+      socket.off('editor_mode_changed');
+      socket.off('editable_state_changed');
+      socket.off('theme_changed');
+      socket.off('room_deleted');
+    };
+  }
+}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible]);
+
 
   // Handle Awareness State
   useEffect(() => {
