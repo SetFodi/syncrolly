@@ -71,9 +71,6 @@ function RoomPage() {
   // Initialize Yjs document
   const ydoc = useMemo(() => new Y.Doc(), []);
 
-  // Initialize a single Y.Text instance
-  const yText = useMemo(() => ydoc.getText('shared-text'), [ydoc]);
-
   // Initialize WebsocketProvider and Awareness
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
@@ -192,7 +189,6 @@ function RoomPage() {
     isCreator,
     navigate,
     chatVisible,
-    yText
   ]);
 
   useEffect(() => {
@@ -222,18 +218,7 @@ function RoomPage() {
     }
   }, [isNameSet, userName, awareness, storedUserId]);
 
-  useEffect(() => {
-    if (isNameSet) {
-      const handleYjsUpdate = () => {
-        // Additional logic if needed
-      };
-      ydoc.on('update', handleYjsUpdate);
-
-      return () => {
-        ydoc.off('update', handleYjsUpdate);
-      };
-    }
-  }, [isNameSet, ydoc]);
+  // Removed manual Yjs document handling to rely solely on yCollab
 
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -247,7 +232,7 @@ function RoomPage() {
 
   const handleDownload = () => {
     // Determine the file content based on the editor mode
-    const content = plainText; // Both modes use plainText
+    const content = ydoc.getText('shared-text').toString(); // Get content from Yjs document
 
     // Map language to file extension
     const languageFileExtensions = {
@@ -400,7 +385,7 @@ function RoomPage() {
     if (!chatVisible) {
       setHasUnreadMessages(false);
     }
-    console.log('yText when chat is toggled:', yText.toString());
+    console.log('yText when chat is toggled:', ydoc.getText('shared-text').toString());
   };
 
   const handleTypingStart = () => {
@@ -435,48 +420,9 @@ function RoomPage() {
       baseExtension || markdown(), // Fallback to markdown if extension is undefined
       EditorView.lineWrapping,
       EditorView.editable.of(isEditable || isCreator),
-      yCollab(yText, awareness, {}),
+      yCollab(ydoc.getText('shared-text'), awareness, {}),
     ];
-  }, [isEditable, isCreator, isCodeMode, yText, awareness, selectedLanguage, languageExtensions]);
-
-  const debouncedUpdateYjs = useMemo(() => debounce((value) => {
-    if (value !== yText.toString()) {
-      ydoc.transact(() => {
-        yText.delete(0, yText.length);
-        yText.insert(0, value);
-      });
-    }
-  }, 300), [yText, ydoc]);
-
-  useEffect(() => {
-    return () => {
-      debouncedUpdateYjs.cancel();
-    };
-  }, [debouncedUpdateYjs]);
-
-  const [plainText, setPlainText] = useState(yText.toString());
-
-  useEffect(() => {
-    setPlainText(yText.toString());
-    console.log('Initial yText:', yText.toString());
-
-    const updateHandler = () => {
-      setPlainText(yText.toString());
-      console.log('yText updated:', yText.toString());
-    };
-
-    yText.observe(updateHandler);
-    return () => {
-      yText.unobserve(updateHandler);
-    };
-  }, [yText]);
-
-  const handlePlainTextChange = (e) => {
-    const newValue = e.target.value;
-    setPlainText(newValue);
-    handleTypingStart();
-    debouncedUpdateYjs(newValue);
-  };
+  }, [isEditable, isCreator, isCodeMode, awareness, selectedLanguage, languageExtensions, ydoc]);
 
   return loading ? (
     <div className={styles['loading-container']}>
@@ -588,7 +534,6 @@ function RoomPage() {
           <div className={styles['main-content']}>
             {isCodeMode ? (
               <CodeMirror
-                value={plainText}
                 extensions={editorExtensions}
                 className={`${styles['code-editor']} ${styles[theme]}`}
                 readOnly={!(isEditable || isCreator)}
@@ -596,13 +541,16 @@ function RoomPage() {
             ) : (
               <>
                 <textarea
-                  value={plainText}
-                  onChange={handlePlainTextChange}
-                  onBlur={handleTypingStop}
+                  value={ydoc.getText('shared-text').toString()}
+                  onChange={(e) => {
+                    // Updates are handled by yCollab; no manual state update needed
+                    handleTypingStart();
+                  }}
                   className={`${styles['text-editor']} ${styles[theme]}`}
                   placeholder="Start typing..."
                   disabled={!isEditable && !isCreator}
                   onFocus={handleTypingStart}
+                  onBlur={handleTypingStop}
                 />
                 {showReminder && (
                   <div className={styles['editor-reminder']}>
