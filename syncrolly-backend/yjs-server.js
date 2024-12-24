@@ -3,7 +3,7 @@
 const http = require('http');
 const WebSocket = require('ws');
 const setupWSConnection = require('y-websocket/bin/utils.js').setupWSConnection;
-const MongoDBPersistence = require('y-mongodb').MongoDBPersistence;
+const { MongoDBPersistence } = require('y-mongodb');
 const dotenv = require('dotenv');
 const { MongoClient } = require('mongodb');
 const url = require('url');
