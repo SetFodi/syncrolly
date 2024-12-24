@@ -354,15 +354,17 @@ useEffect(() => {
   };
 
   // Editor Extensions
-  const editorExtensions = useMemo(() => {
-    const baseExtension = isCodeMode ? languageExtensions[selectedLanguage] : markdown();
-    return [
-      baseExtension || markdown(), // Fallback to markdown if extension is undefined
-      EditorView.lineWrapping,
-      EditorView.editable.of(isEditable || isCreator),
-      yCollab(ydoc.getText('shared-text'), awareness, {}),
-    ];
-  }, [isEditable, isCreator, isCodeMode, awareness, selectedLanguage, languageExtensions, ydoc]);
+// Editor Extensions
+const editorExtensions = useMemo(() => {
+  const baseExtension = isCodeMode ? languageExtensions[selectedLanguage] : markdown();
+  return [
+    baseExtension || markdown(), // Fallback to markdown if extension is undefined
+    EditorView.lineWrapping,
+    EditorView.editable.of(isEditable || isCreator),
+    yCollab(ydoc.getText('shared-text'), awareness, {}),
+  ];
+}, [isEditable, isCreator, isCodeMode, awareness, selectedLanguage, languageExtensions, ydoc]);
+
 
   return (
     <div className={`${styles['room-container']} ${styles[theme]}`}>
