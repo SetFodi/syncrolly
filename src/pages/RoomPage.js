@@ -8,7 +8,6 @@ import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
-import debounce from 'lodash.debounce';
 import styles from './RoomPage.module.css';
 import FilesModal from './FilesModal';
 import '@fortawesome/fontawesome-free/css/all.min.css';
@@ -75,6 +74,9 @@ function RoomPage() {
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
 
+  // State to track if Yjs is synchronized
+  const [isYjsSynced, setIsYjsSynced] = useState(false);
+
   useEffect(() => {
     if (isNameSet) {
       const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
@@ -83,13 +85,20 @@ function RoomPage() {
       setAwareness(newProvider.awareness);
       console.log('Connected to Yjs WebsocketProvider');
 
+      // Listen to provider status to determine when it's synced
       newProvider.on('status', event => {
         console.log(`WebsocketProvider status: ${event.status}`);
+        if (event.status === 'connected') {
+          setIsYjsSynced(true); // Yjs is synced
+        } else {
+          setIsYjsSynced(false); // Yjs is disconnected
+        }
       });
 
       return () => {
         newProvider.destroy();
         setAwareness(null);
+        setIsYjsSynced(false);
         console.log('Disconnected from Yjs WebsocketProvider');
       };
     }
@@ -385,7 +394,7 @@ function RoomPage() {
     if (!chatVisible) {
       setHasUnreadMessages(false);
     }
-    console.log('yText when chat is toggled:', ydoc.getText('shared-text').toString());
+    console.log('Yjs Document Content:', ydoc.getText('shared-text').toString());
   };
 
   const handleTypingStart = () => {
@@ -443,6 +452,8 @@ function RoomPage() {
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             className={styles['name-input']}
+            placeholder="Enter your name"
+            aria-label="User Name"
           />
           <button onClick={handleNameSubmit} className={styles['submit-btn']}>
             Set Name
@@ -464,9 +475,9 @@ function RoomPage() {
             {isCreator && (
               <button 
                 onClick={handleEditableToggle} 
-                className={`${styles['toggle-btn']} ${isEditable ? 'editable' : 'viewOnly'}`}
+                className={`${styles['toggle-btn']} ${isEditable ? styles['editable'] : styles['viewOnly']}`}
+                aria-label={isEditable ? 'Set to View-Only' : 'Make Editable'}
               >
-                <span className="icon"></span>
                 {isEditable ? "Set to View-Only" : "Make Editable"}
               </button>
             )}
@@ -478,10 +489,10 @@ function RoomPage() {
                 )}
                 {chatVisible ? 'Close Chat' : 'Chat'}
               </button>
-              <button onClick={() => setFilesModalVisible(true)} className={styles['files-btn']}>
+              <button onClick={() => setFilesModalVisible(true)} className={styles['files-btn']} aria-label="View Files">
                 View Files
               </button>
-              <button onClick={handleDownload} className={styles['download-btn']}>
+              <button onClick={handleDownload} className={styles['download-btn']} aria-label="Download Content">
                 Download
               </button>
             </div>
@@ -498,7 +509,7 @@ function RoomPage() {
 
             {isCreator && (
               <div className={styles['editor-toggle']}>
-                <button onClick={handleToggleEditorMode} className={styles['toggle-editor-btn']}>
+                <button onClick={handleToggleEditorMode} className={styles['toggle-editor-btn']} aria-label="Toggle Editor Mode">
                   {isCodeMode ? 'Switch to Text Editor' : 'Switch to Code Editor'}
                 </button>
               </div>
@@ -512,6 +523,7 @@ function RoomPage() {
                   id="language-select"
                   value={selectedLanguage}
                   onChange={(e) => setSelectedLanguage(e.target.value)}
+                  aria-label="Select Language"
                 >
                   <option value="javascript">JavaScript</option>
                   <option value="python">Python</option>
@@ -533,31 +545,44 @@ function RoomPage() {
 
           <div className={styles['main-content']}>
             {isCodeMode ? (
-              <CodeMirror
-                extensions={editorExtensions}
-                className={`${styles['code-editor']} ${styles[theme]}`}
-                readOnly={!(isEditable || isCreator)}
-              />
-            ) : (
-              <>
-                <textarea
-                  value={ydoc.getText('shared-text').toString()}
-                  onChange={(e) => {
-                    // Updates are handled by yCollab; no manual state update needed
-                    handleTypingStart();
-                  }}
-                  className={`${styles['text-editor']} ${styles[theme]}`}
-                  placeholder="Start typing..."
-                  disabled={!isEditable && !isCreator}
-                  onFocus={handleTypingStart}
-                  onBlur={handleTypingStop}
+              isYjsSynced ? ( // Only render CodeMirror when Yjs is synced
+                <CodeMirror
+                  extensions={editorExtensions}
+                  className={`${styles['code-editor']} ${styles[theme]}`}
+                  readOnly={!(isEditable || isCreator)}
                 />
-                {showReminder && (
-                  <div className={styles['editor-reminder']}>
-                    <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
-                  </div>
-                )}
-              </>
+              ) : (
+                <div className={styles['yjs-loading']}>
+                  <p>Synchronizing editor content...</p>
+                </div>
+              )
+            ) : (
+              isYjsSynced ? ( // Only render textarea when Yjs is synced
+                <>
+                  <textarea
+                    value={ydoc.getText('shared-text').toString()}
+                    onChange={(e) => {
+                      // No manual state update; yCollab handles it
+                      handleTypingStart();
+                    }}
+                    className={`${styles['text-editor']} ${styles[theme]}`}
+                    placeholder="Start typing..."
+                    disabled={!isEditable && !isCreator}
+                    onFocus={handleTypingStart}
+                    onBlur={handleTypingStop}
+                    aria-label="Plain Text Editor"
+                  />
+                  {showReminder && (
+                    <div className={styles['editor-reminder']}>
+                      <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className={styles['yjs-loading']}>
+                  <p>Synchronizing editor content...</p>
+                </div>
+              )
             )}
           </div>
 
@@ -571,7 +596,7 @@ function RoomPage() {
           </div>
 
           <div className={`${styles['chat-box']} ${chatVisible ? styles['open'] : ''} ${styles[theme]}`}>
-            <button onClick={toggleChatBox} className={styles['close-btn']}>
+            <button onClick={toggleChatBox} className={styles['close-btn']} aria-label="Close Chat">
               X
             </button>
             <div className={styles['messages']}>
@@ -593,8 +618,10 @@ function RoomPage() {
                   handleSendMessage();
                 }
               }}
+              placeholder="Type your message..."
+              aria-label="Chat Input"
             />
-            <button onClick={handleSendMessage} className={styles['send-btn']}>
+            <button onClick={handleSendMessage} className={styles['send-btn']} aria-label="Send Message">
               Send
             </button>
           </div>
