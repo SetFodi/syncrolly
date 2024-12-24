@@ -1,8 +1,14 @@
+// yjs-server.js
+
 const http = require('http');
 const WebSocket = require('ws');
 const setupWSConnection = require('y-websocket/bin/utils.js').setupWSConnection;
 const LeveldbPersistence = require('y-leveldb').LeveldbPersistence;
 const dotenv = require('dotenv');
+const { MongoClient } = require('mongodb');
+const url = require('url');
+const Y = require('yjs');
+
 dotenv.config();
 
 // Define the port for the Yjs WebSocket server
@@ -40,10 +46,33 @@ function broadcastRoomData() {
   console.log('Active Rooms:', activeRooms);
 }
 
+// Connect to MongoDB
+const MONGO_URI = process.env.MONGO_URI;
+const MONGO_DB = process.env.MONGO_DB || 'syncrolly';
+let roomsCollection;
+
+const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+client.connect()
+  .then(() => {
+    console.log('Connected to MongoDB from Yjs server');
+    const db = client.db(MONGO_DB);
+    roomsCollection = db.collection('rooms');
+
+    // Start the WebSocket server after MongoDB connection is established
+    server.listen(PORT, () => {
+      console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });
+
 // Handle WebSocket connections
 wss.on('connection', (conn, req) => {
-  const url = req.url;
-  const roomName = url.slice(1).split('?')[0] || 'Unnamed Room';
+  const parsedUrl = url.parse(req.url, true);
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'Unnamed Room';
   console.log(`Client connected to room: ${roomName}`);
 
   // Initialize room data if not present
@@ -87,10 +116,26 @@ wss.on('connection', (conn, req) => {
   setupWSConnection(conn, req, {
     docName: roomName,
     persistence,
+    gc: true, // garbage collect
   });
-});
 
-// Start the server
-server.listen(PORT, () => {
-  console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
+  // After setupWSConnection, get the Yjs document and attach an observer
+  persistence.getYDoc(roomName).then((ydoc) => {
+    ydoc.on('update', async (update, origin) => {
+      if (roomsCollection) {
+        try {
+          await roomsCollection.updateOne(
+            { roomId: roomName },
+            { $set: { lastActivity: new Date() } },
+            { upsert: true }
+          );
+          console.log(`Updated lastActivity for room: ${roomName}`);
+        } catch (error) {
+          console.error(`Error updating lastActivity for room ${roomName}:`, error);
+        }
+      }
+    });
+  }).catch(err => {
+    console.error(`Error getting YDoc for room ${roomName}:`, err);
+  });
 });
