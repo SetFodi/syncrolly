@@ -560,15 +560,14 @@ function RoomPage() {
           </div>
 
           <div className={styles['main-content']}>
-            {isYjsSynced ? ( // Only render CodeMirror when Yjs is synced
-              <CodeMirror
-                extensions={editorExtensions}
-                className={`${styles['code-editor']} ${styles[theme]}`}
-                readOnly={!(isEditable || isCreator)}
-                aria-label="Code Editor"
-              />
-            ) : (
-              <div className={styles['yjs-loading']}>
+            <CodeMirror
+              extensions={editorExtensions}
+              className={`${styles['code-editor']} ${styles[theme]}`}
+              readOnly={!(isEditable || isCreator)}
+              aria-label="Code Editor"
+            />
+            {!isYjsSynced && (
+              <div className={styles['yjs-loading-overlay']}>
                 <p>Synchronizing editor content...</p>
               </div>
             )}
