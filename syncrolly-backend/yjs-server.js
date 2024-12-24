@@ -1,13 +1,13 @@
-// yjs-server.mjs
+// yjs-server.js
 
-import http from 'http';
-import WebSocket from 'ws';
-import { setupWSConnection } from 'y-websocket/bin/utils.js';
-import { MongoDBPersistence } from 'y-mongodb';
-import dotenv from 'dotenv';
-import { MongoClient } from 'mongodb';
-import url from 'url';
-import * as Y from 'yjs';
+const http = require('http');
+const WebSocket = require('ws');
+const { setupWSConnection } = require('y-websocket/bin/utils.js');
+const { MongoDBPersistence } = require('y-mongodb');
+const dotenv = require('dotenv');
+const { MongoClient } = require('mongodb');
+const url = require('url');
+const Y = require('yjs');
 
 dotenv.config();
 
@@ -138,4 +138,4 @@ client.connect()
     process.exit(1);
   });
 
-// No duplicate server.listen here
+// Ensure no duplicate server.listen call exists
