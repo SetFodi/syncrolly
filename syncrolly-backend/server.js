@@ -48,7 +48,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ===== MongoDB Setup =====
 // =========================
 const MONGO_URI = process.env.MONGO_URI;
-const client = new MongoClient(MONGO_URI);
+const client = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 let roomsCollection;
 let uploadsCollection;
@@ -434,12 +434,11 @@ async function startServer() {
     cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
       try {
         const now = new Date();
-       const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
-
+        const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
 
         console.log(`Running scheduled task to delete inactive rooms. Current time: ${now}`);
 
-        // Find rooms with lastActivity older than 48 hours
+        // Find rooms with lastActivity older than 72 hours
         const inactiveRooms = await roomsCollection.find({ lastActivity: { $lt: cutoffTime } }).toArray();
 
         if (inactiveRooms.length === 0) {
