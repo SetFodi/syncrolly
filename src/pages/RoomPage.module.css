@@ -1,3 +1,5 @@
+/* RoomPage.module.css */
+
 /* ============================= */
 /* 1. General Container */
 /* ============================= */
@@ -27,13 +29,6 @@ html, body {
   background-color: #121111;
   color: #fff;
 }
-/* Add this to your RoomPage.module.css */
-.loading-message {
-  font-size: 0.9rem;
-  color: #888;
-  margin-top: 10px;
-  text-align: center;
-}
 
 /* ============================= */
 /* 2. Header */
@@ -58,34 +53,30 @@ html, body {
   align-items: center;
 }
 
-/* Base logo style */
 .syncrolly-logo {
   max-width: 60px;
   height: auto;
   margin-right: 0;
-  transition: transform 0.3s ease, filter 0.3s ease; /* Adding transition for filter */
-  filter: brightness(0) invert(0); /* Default (light) mode */
+  transition: transform 0.3s ease, filter 0.3s ease;
+  filter: brightness(0) invert(0);
 }
 
-/* Hover effect */
 .syncrolly-logo:hover {
   transform: scale(1.05);
 }
 
-/* Light mode */
 .room-container.light .syncrolly-logo {
-  filter: brightness(0) invert(0); /* Default color for light mode */
+  filter: brightness(0) invert(0);
 }
 
-/* Dark mode */
 .room-container.dark .syncrolly-logo {
-  filter: brightness(0) invert(1); /* White logo in dark mode */
+  filter: brightness(0) invert(1);
 }
+
 .room-container.dark label{
   color: #fff;
 }
 
-/* Room Name: Order 2 */
 .header h1 {
   order: 2;
   margin: 0;
@@ -93,7 +84,6 @@ html, body {
   color: inherit;
 }
 
-/* Chat and Files: Order 3 */
 .chat-toggle {
   order: 3;
   display: flex;
@@ -101,7 +91,6 @@ html, body {
   gap: 15px;
 }
 
-/* Set to View-Only Button: Order 4 */
 .toggle-btn {
   order: 4;
   background-color: #28a745;
@@ -139,18 +128,17 @@ html, body {
 }
 
 .toggle-btn.editable .icon::before {
-  content: "\f044";
+  content: "\f044"; /* Font Awesome Pencil */
   font-family: "Font Awesome 5 Free";
   font-weight: 900;
 }
 
 .toggle-btn.viewOnly .icon::before {
-  content: "\f070";
+  content: "\f070"; /* Font Awesome Eye */
   font-family: "Font Awesome 5 Free";
   font-weight: 900;
 }
 
-/* Switch to Text Editor: Order 5 */
 .editor-toggle {
   order: 5;
   display: flex;
@@ -158,7 +146,8 @@ html, body {
 }
 
 .chat-btn,
-.files-btn {
+.files-btn,
+.download-btn {
   padding: 10px 20px;
   background-color: #007bff;
   color: #fff;
@@ -168,6 +157,7 @@ html, body {
   font-size: 0.95rem;
   transition: background-color 0.3s, transform 0.2s;
 }
+
 .download-btn{
   padding: 10px 10px;
   background-color: #007bff;
@@ -178,6 +168,7 @@ html, body {
   font-size: 0.95rem;
   transition: background-color 0.3s, transform 0.2s;
 }
+
 .chat-btn:hover,
 .files-btn:hover,
 .download-btn:hover {
@@ -205,7 +196,6 @@ html, body {
   background-color: #218838;
 }
 
-/* Theme Toggle: Order 6 */
 .theme-toggle {
   order: 7;
   margin-left: auto;
@@ -227,7 +217,6 @@ html, body {
   transform: scale(1.2);
 }
 
-/* Current Editor Mode: Order 7 */
 .current-editor-mode {
   order: 7;
   margin-top: 10px;
@@ -235,6 +224,7 @@ html, body {
   font-size: 14px;
   color: #555;
 }
+
 .room-container.dark .current-editor-mode {
   color: #fff;
 }
@@ -295,6 +285,7 @@ html, body {
   margin-top: 15px;
   padding: 10px;
   overflow: hidden;
+  position: relative; /* For synchronization overlay */
 }
 
 .code-editor {
@@ -331,6 +322,35 @@ html, body {
   resize: vertical;
   background-color: var(--background-color);
   color: var(--text-color);
+}
+
+/* Synchronization Overlay */
+.yjs-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent background */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10; /* Ensure it's above the editor */
+  pointer-events: none; /* Allow interactions with the editor underneath */
+}
+
+.room-container.dark .yjs-loading-overlay {
+  background-color: rgba(18, 17, 17, 0.8); /* Darker overlay for dark mode */
+  color: #d4d4d4;
+}
+
+.yjs-loading-overlay p {
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.room-container.dark .yjs-loading-overlay p {
+  color: #d4d4d4;
 }
 
 /* ============================= */
@@ -595,97 +615,9 @@ html, body {
   margin-bottom: 20px;
 }
 
-/* frontend/src/pages/RoomPage.module.css */
-.language-select {
-  order: 5;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 8px;
-  padding: 8px 12px;
-  transition: all 0.3s ease-in-out;
-}
-
-.language-select:hover {
-  background: linear-gradient(45deg, #e6e6e6, #f7f7f7);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.room-container.dark .language-select:hover {
-  background: linear-gradient(45deg, #121111, #1e1e1e);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.language-select label {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-  transition: color 0.3s ease;
-}
-
-.language-select select {
-  font-size: 14px;
-  padding: 6px 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background-color: #fff;
-  color: #333;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.language-select select:hover {
-  border-color: #888;
-}
-
-.language-select select:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 4px rgba(0, 123, 255, 0.3);
-}
-.room-container.dark .language-select {
-  background-color: #121111;
-  color: #fff;
-}
-
-.chat-btn {
-  position: relative;
-}
-
-.notification-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: red;
-  color: white;
-  font-size: 0.7rem;
-  border-radius: 50%;
-  padding: 2px 5px;
-  line-height: 1;
-  display: inline-block;
-  font-weight: bold;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-  70% {
-    transform: scale(1.3);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
 /* ============================= */
 /* 10. Responsive Design Adjustments */
 /* ============================= */
-
 
 /* Small Screens (Below 768px) */
 @media (max-width: 968px) {
@@ -714,7 +646,6 @@ html, body {
   .syncrolly-logo {
     max-width: 35px;
     margin-right: 5px;
-
   }
 
   .chat-btn,
@@ -722,16 +653,17 @@ html, body {
   .toggle-btn,
   .send-btn,
   .delete-btn,
-  .theme-btn,
   .toggle-editor-btn {
     font-size: 0.7rem;
     padding: 3px 6px;
     margin: 2px 0;
   }
-.theme-btn{
-  font-size: 1.2rem;
-  padding: 10px ;
-}
+
+  .theme-btn{
+    font-size: 1.2rem;
+    padding: 10px ;
+  }
+
   .code-editor,
   .text-editor {
     font-size: 0.85rem;
@@ -811,12 +743,12 @@ html, body {
     flex-wrap: wrap; /* Allow buttons to wrap if necessary */
     gap: 3px; /* Small gap between buttons */
   }
-.download-btn {
-  font-size: 0.65rem;
-  padding: 6px 6px;
-  margin: 0; /* Remove extra margins */
-  border-radius: 4px;
-}
+  .download-btn {
+    font-size: 0.65rem;
+    padding: 6px 6px;
+    margin: 0; /* Remove extra margins */
+    border-radius: 4px;
+  }
   /* Adjust .toggle-btn size and spacing */
   .toggle-btn {
     font-size: 0.65rem;
@@ -861,7 +793,6 @@ html, body {
     margin-left: 4px;
   }
 }
-
 
 /* ============================= */
 /* 11. CodeMirror Custom Styles */
@@ -930,4 +861,116 @@ html, body {
 .room-container.dark :global(.cm-foldedText) {
   background-color: #2d2d2d !important;
   color: #d4d4d4 !important;
+}
+
+/* ============================= */
+/* 12. Language Selector Styles */
+/* ============================= */
+
+.language-select {
+  order: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: all 0.3s ease-in-out;
+}
+
+.language-select:hover {
+  background: linear-gradient(45deg, #e6e6e6, #f7f7f7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.room-container.dark .language-select:hover {
+  background: linear-gradient(45deg, #121111, #1e1e1e);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.language-select label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.room-container.dark .language-select label {
+  color: #fff;
+}
+
+.language-select select {
+  font-size: 14px;
+  padding: 6px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.language-select select:hover {
+  border-color: #888;
+}
+
+.language-select select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.3);
+}
+
+.room-container.dark .language-select select {
+  background-color: #333;
+  color: #d4d4d4;
+}
+
+.language-select select option {
+  color: #333;
+  background-color: #fff;
+}
+
+.room-container.dark .language-select select option {
+  color: #d4d4d4;
+  background-color: #333;
+}
+
+/* ============================= */
+/* 13. Notification Badge */
+.chat-btn {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: red;
+  color: white;
+  font-size: 0.7rem;
+  border-radius: 50%;
+  padding: 2px 5px;
+  line-height: 1;
+  display: inline-block;
+  font-weight: bold;
+}
+
+/* ============================= */
+/* 14. Animations */
+/* ============================= */
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  70% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
