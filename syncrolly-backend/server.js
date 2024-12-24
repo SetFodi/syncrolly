@@ -90,8 +90,8 @@ const upload = multer({
 });
 
 // ============================
-# ===== Socket.IO Setup =====
-# ============================
+// ===== Socket.IO Setup =====
+// ============================
 const socketUserMap = new Map(); // Map to store socket.id => { userId, roomId }
 
 async function startServer() {
@@ -116,8 +116,8 @@ async function startServer() {
     });
 
     // =======================
-    # ===== File Routes =====
-    # =======================
+    // ===== File Routes =====
+    // =======================
 
     // File Upload Route
     app.post('/upload/:roomId', upload.single('file'), async (req, res) => {
@@ -216,8 +216,8 @@ async function startServer() {
     });
 
     // ========================
-    # ===== Socket.IO Events =====
-    # ========================
+    // ===== Socket.IO Events =====
+    // ========================
     io.on('connection', async (socket) => {
       console.log(`User connected: ${socket.id}`);
 
@@ -434,8 +434,8 @@ async function startServer() {
     });
 
     // ================================
-    # ===== Scheduled Cleanup Task =====
-    # ================================
+    // ===== Scheduled Cleanup Task =====
+    // ================================
     cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
       try {
         const now = new Date();
@@ -495,8 +495,8 @@ async function startServer() {
     });
 
     // ======================
-    # ===== Start Server =====
-    # ======================
+    // ===== Start Server =====
+    // ======================
     const PORT = process.env.PORT || 4000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
