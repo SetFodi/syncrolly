@@ -7,14 +7,24 @@ const { LeveldbPersistence } = require('y-leveldb');
 const dotenv = require('dotenv');
 const url = require('url');
 const Y = require('yjs');
+const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
 // Define the port for the Yjs WebSocket server
 const PORT = process.env.YJS_PORT || 1234;
 
+// Define the persistence directory
+const persistenceDir = path.join(__dirname, 'yjs-docs');
+
+// Create the directory if it doesn't exist
+if (!fs.existsSync(persistenceDir)) {
+  fs.mkdirSync(persistenceDir);
+}
+
 // Initialize LevelDB Persistence
-const persistence = new LeveldbPersistence('./yjs-docs'); // Ensure this directory exists and is writable
+const persistence = new LeveldbPersistence(persistenceDir); // Ensure this directory exists and is writable
 
 // Create an HTTP server
 const server = http.createServer((req, res) => {
@@ -25,10 +35,10 @@ const server = http.createServer((req, res) => {
 // Initialize the WebSocket server instance
 const wss = new WebSocket.Server({ server });
 
-// Object to track active rooms and their client counts
+// Object to track active rooms and their client counts (optional)
 const roomData = {};
 
-// Function to broadcast room data to all connected clients
+// Function to broadcast room data to all connected clients (optional)
 function broadcastRoomData() {
   const activeRooms = Object.entries(roomData).map(([roomName, clients]) => ({
     roomName: roomName || 'Unnamed Room',
@@ -45,24 +55,19 @@ function broadcastRoomData() {
   console.log('Active Rooms:', activeRooms);
 }
 
-// Start the WebSocket server
-server.listen(PORT, () => {
-  console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
-});
-
 // Handle WebSocket connections
 wss.on('connection', (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'Unnamed Room';
-  console.log(`Client connected to room: ${roomName}`);
+  console.log(`Yjs Client connected to room: ${roomName}`);
 
-  // Initialize room data if not present
+  // Initialize room data if not present (optional)
   if (!roomData[roomName]) {
     roomData[roomName] = 0;
   }
   roomData[roomName]++;
 
-  // Broadcast updated room data
+  // Broadcast updated room data (optional)
   broadcastRoomData();
 
   // Keep connection alive with pings
@@ -88,7 +93,7 @@ wss.on('connection', (conn, req) => {
       }
     }
 
-    // Broadcast updated room data
+    // Broadcast updated room data (optional)
     broadcastRoomData();
     clearInterval(keepAliveInterval);
   });
@@ -100,14 +105,18 @@ wss.on('connection', (conn, req) => {
     gc: true, // garbage collect
   });
 
-  // After setupWSConnection, get the Yjs document and attach an observer
+  // After setupWSConnection, get the Yjs document and attach an observer (optional)
   persistence.getYDoc(roomName).then((ydoc) => {
-    ydoc.on('update', async (update, origin) => {
-      // Implement any additional logic if needed
+    ydoc.on('update', (update, origin) => {
       console.log(`Document for room ${roomName} updated`);
-      // Since we're using LevelDB, no need to manually persist updates
+      // Implement any additional logic if needed
     });
   }).catch(err => {
     console.error(`Error getting YDoc for room ${roomName}:`, err);
   });
+});
+
+// Start the Yjs WebSocket server
+server.listen(PORT, () => {
+  console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
 });
