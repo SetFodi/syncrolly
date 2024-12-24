@@ -138,4 +138,4 @@ client.connect()
     process.exit(1);
   });
 
-// Ensure no duplicate server.listen call exists
+// No duplicate server.listen here
