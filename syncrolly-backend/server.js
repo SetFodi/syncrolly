@@ -396,50 +396,52 @@ async function startServer() {
           console.error('Error in change_theme:', error);
         }
       });
-
+      
+socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
+  try {
+    const room = await roomsCollection.findOne({ roomId });
+    if (room) {
+      // Save the current text to the room document in the database
+      await roomsCollection.updateOne(
+        { roomId },
+        { $set: { text: currentText, lastActivity: new Date() } }
+      );
+      console.log(`Saved text for room ${roomId} by user ${userId}`);
+    }
+  } catch (error) {
+    console.error('Error saving editor content on disconnect:', error);
+  }
+});
       // When a user disconnects
   socket.on('disconnect', async () => {
-    console.log(`User disconnected: ${socket.id}`);
+  console.log(`User disconnected: ${socket.id}`);
 
-    // Get user info from socketUserMap
-    const userInfo = socketUserMap.get(socket.id);
-    if (userInfo) {
-      const { roomId, userId } = userInfo;
+  // Get user info from socketUserMap
+  const userInfo = socketUserMap.get(socket.id);
+  if (userInfo) {
+    const { roomId, userId } = userInfo;
 
-      // Get the room to save the editor text
-      const room = await roomsCollection.findOne({ roomId });
-      if (room) {
-        const currentText = /* Logic to get current text from CodeMirror on the client */;
-        
-        // Save the current text to the database
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { text: currentText, lastActivity: new Date() } }
-        );
-        
-        console.log(`Text saved for room ${roomId} by user ${userId}`);
-      }
+    // Now the editor content is saved via `send_editor_content`, no need to save it here
+    // Remove user from MongoDB and update room users
+    const room = await roomsCollection.findOne({ roomId });
+    if (room && room.users[userId]) {
+      delete room.users[userId];
+      await roomsCollection.updateOne(
+        { roomId },
+        { $set: { users: room.users, lastActivity: new Date() } }
+      );
 
-      // Remove user from MongoDB and update room users
-      if (room && room.users[userId]) {
-        delete room.users[userId];
-        await roomsCollection.updateOne(
-          { roomId },
-          { $set: { users: room.users, lastActivity: new Date() } }
-        );
-
-        // Emit updated user list to all clients
-        io.emit('room_users', { roomId, users: room.users });
-      }
-
-      // Remove from socketUserMap
-      socketUserMap.delete(socket.id);
+      // Emit updated user list to all clients
+      io.emit('room_users', { roomId, users: room.users });
     }
 
-    // Emit the updated user count
-    const totalConnectedUsers = await activeUsersCollection.countDocuments();
-    io.emit('status_update', { totalConnectedUsers });
-  });
+    // Remove from socketUserMap
+    socketUserMap.delete(socket.id);
+  }
+
+  // Emit the updated user count
+  const totalConnectedUsers = await activeUsersCollection.countDocuments();
+  io.emit('status_update', { totalConnectedUsers });
 });
 
     // ================================
