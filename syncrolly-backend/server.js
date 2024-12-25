@@ -10,7 +10,7 @@ const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
 const dotenv = require('dotenv');
-import { debounce } from 'lodash';
+const _ = require('lodash');
 dotenv.config();
 
 const app = express();
