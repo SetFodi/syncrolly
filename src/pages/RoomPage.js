@@ -119,20 +119,72 @@ useEffect(() => {
   }
 }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible]);
 
+// Add a new effect to handle text content saving
+useEffect(() => {
+  if (isNameSet && ydoc) {
+    // Set up observer for Yjs text changes
+    const observer = () => {
+      const currentText = ydoc.getText('shared-text').toString();
+      socket.emit('save_text_content', { 
+        roomId,
+        text: currentText
+      });
+    };
+
+    // Observe text changes with debouncing
+    const debouncedObserver = debounce(observer, 1000);
+    ydoc.getText('shared-text').observe(debouncedObserver);
+
+    return () => {
+      // Clean up observer
+      ydoc.getText('shared-text').unobserve(debouncedObserver);
+    };
+  }
+}, [isNameSet, ydoc, roomId]);
+
+  
 useEffect(() => {
   socket.on('room_joined', (roomData) => {
     console.log('Room data:', roomData);
-    if (roomData.text) {
-      // Insert the text into the Yjs document
-      ydoc.getText('shared-text').insert(0, roomData.text);
+    if (roomData.text && ydoc) {
+      // Clear existing content first
+      const yText = ydoc.getText('shared-text');
+      yText.delete(0, yText.length);
+      // Insert the saved text
+      if (roomData.text.length > 0) {
+        yText.insert(0, roomData.text);
+      }
     }
   });
 
   return () => {
     socket.off('room_joined');
   };
-}, []);
+}, [ydoc]);
 
+useEffect(() => {
+  return () => {
+    if (ydoc) {
+      const finalText = ydoc.getText('shared-text').toString();
+      socket.emit('send_editor_content', {
+        roomId,
+        userId: storedUserId,
+        currentText: finalText
+      });
+    }
+  };
+}, [ydoc, roomId, storedUserId]);  
+
+    // Observe text changes with debouncing
+    const debouncedObserver = debounce(observer, 1000);
+    ydoc.getText('shared-text').observe(debouncedObserver);
+
+    return () => {
+      // Clean up observer
+      ydoc.getText('shared-text').unobserve(debouncedObserver);
+    };
+  }
+}, [isNameSet, ydoc, roomId]);
   // Handle Awareness State
   useEffect(() => {
     if (isNameSet && awareness) {
