@@ -10,7 +10,7 @@ const fs = require('fs');
 const cors = require('cors');
 const cron = require('node-cron');
 const dotenv = require('dotenv');
-
+import { debounce } from 'lodash';
 dotenv.config();
 
 const app = express();
@@ -437,59 +437,59 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
   }
 });
       // Modify the disconnect handler to save the final text content
-socket.on('disconnect', async () => {
-  console.log(`User disconnected: ${socket.id}`);
-  
-  const userInfo = socketUserMap.get(socket.id);
-  if (userInfo) {
-    const { roomId, userId } = userInfo;
-    
-    // Get the room and check if this is the last user
-    const room = await roomsCollection.findOne({ roomId });
-    if (room) {
-      delete room.users[userId];
-      
-      // If this was the last user, ensure we save the final text state
-      if (Object.keys(room.users).length === 0) {
-        const finalText = room.text; // Make sure to capture the final text state
-        await roomsCollection.updateOne(
-          { roomId },
-          { 
-            $set: { 
-              users: room.users,
-              text: finalText,
-              lastActivity: new Date()
+      socket.on('disconnect', async () => {
+        console.log(`User disconnected: ${socket.id}`);
+        
+        const userInfo = socketUserMap.get(socket.id);
+        if (userInfo) {
+          const { roomId, userId } = userInfo;
+          
+          // Get the room and check if this is the last user
+          const room = await roomsCollection.findOne({ roomId });
+          if (room) {
+            delete room.users[userId];
+            
+            // If this was the last user, ensure we save the final text state
+            if (Object.keys(room.users).length === 0) {
+              const finalText = room.text; // Make sure to capture the final text state
+              await roomsCollection.updateOne(
+                { roomId },
+                { 
+                  $set: { 
+                    users: room.users,
+                    text: finalText,
+                    lastActivity: new Date()
+                  }
+                }
+              );
+            } else {
+              await roomsCollection.updateOne(
+                { roomId },
+                { 
+                  $set: { 
+                    users: room.users,
+                    lastActivity: new Date()
+                  }
+                }
+              );
             }
+            
+            io.emit('room_users', { roomId, users: room.users });
           }
-        );
-      } else {
-        await roomsCollection.updateOne(
-          { roomId },
-          { 
-            $set: { 
-              users: room.users,
-              lastActivity: new Date()
-            }
-          }
-        );
-      }
-      
-      io.emit('room_users', { roomId, users: room.users });
-    }
-    
-    socketUserMap.delete(socket.id);
-  }
+          
+          socketUserMap.delete(socket.id);
+        }
 
-  await activeUsersCollection.deleteOne({ socketId: socket.id });
-  const totalConnectedUsers = await activeUsersCollection.countDocuments();
-  io.emit('status_update', { totalConnectedUsers });
-});
+        await activeUsersCollection.deleteOne({ socketId: socket.id });
+        const totalConnectedUsers = await activeUsersCollection.countDocuments();
+        io.emit('status_update', { totalConnectedUsers });
+      });
 
 
     // ================================
     // ===== Scheduled Cleanup Task =====
     // ================================
-        cron.schedule('0 * * * *', async () => {
+    cron.schedule('0 * * * *', async () => {
       try {
         const now = new Date();
         const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000);
@@ -533,7 +533,10 @@ socket.on('disconnect', async () => {
             console.warn(`Failed to delete room ${roomId} from rooms collection.`);
           }
 
-          io.to(roomId).emit('room_deleted', { message: 'This room has been deleted due to inactivity.' });
+          io.to(roomId).emit('room_deleted', { 
+            message: 'This room has been deleted due to inactivity.',
+            deleteAfter: new Date()
+          });
         }
       } catch (error) {
         console.error('Error during scheduled room deletion:', error);
@@ -544,11 +547,12 @@ socket.on('disconnect', async () => {
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
     });
+  });
 
-  } catch (error) {
-    console.error('Error starting server:', error);
-    process.exit(1);
-  }
+} catch (error) {
+  console.error('Error starting server:', error);
+  process.exit(1);
+}
 }
 
 startServer();
