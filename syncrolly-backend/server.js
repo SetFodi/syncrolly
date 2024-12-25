@@ -229,7 +229,7 @@ async function startServer() {
       io.emit('status_update', { totalConnectedUsers });
 
       // Handle room joining
-  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
   try {
     let room = await roomsCollection.findOne({ roomId });
 
@@ -287,6 +287,7 @@ async function startServer() {
     callback({ error: 'Internal Server Error' });
   }
 });
+
 
       // Handle toggle_editability
       socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
