@@ -11,9 +11,11 @@ const cors = require('cors');
 const cron = require('node-cron');
 const dotenv = require('dotenv');
 const _ = require('lodash');
+
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app); // Declare server globally
 
 // =====================
 // ===== CORS Setup =====
@@ -94,26 +96,15 @@ const upload = multer({
 // ============================
 const socketUserMap = new Map(); // Map to store socket.id => { userId, roomId }
 
-async function startServer() {
-  try {
-    // Connect to MongoDB
-    await client.connect();
-    console.log('Connected to MongoDB');
-    const db = client.db('syncrolly');
-    roomsCollection = db.collection('rooms');
-    uploadsCollection = db.collection('uploads');
-    activeUsersCollection = db.collection('activeUsers'); // Initialize activeUsersCollection
+// Initialize Socket.IO with Express server
+const io = new Server(server, {
+  cors: {
+    origin: allowedFrontendUrls,
+    methods: ['GET', 'POST'],
+  },
+});
 
-    // Initialize HTTP server
-    const server = http.createServer(app);
 
-    // Initialize Socket.IO with Express server
-    const io = new Server(server, {
-      cors: {
-        origin: allowedFrontendUrls,
-        methods: ['GET', 'POST'],
-      },
-    });
 
     // =======================
     // ===== File Routes =====
@@ -193,13 +184,13 @@ async function startServer() {
         const deleteResult = await uploadsCollection.deleteOne({ _id: new ObjectId(fileId) });
         const filePath = path.join(uploadsDir, path.basename(fileToDelete.fileUrl));
 
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            console.error('Failed to delete file from filesystem:', err);
-          } else {
-            console.log('File deleted from filesystem:', filePath);
-          }
-        });
+        try {
+          // Use fs.promises.unlink for consistency with async/await
+          await fs.promises.unlink(filePath);
+          console.log('File deleted from filesystem:', filePath);
+        } catch (err) {
+          console.error('Failed to delete file from filesystem:', err);
+        }
 
         res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
         res.status(200).json({
@@ -229,87 +220,85 @@ async function startServer() {
       io.emit('status_update', { totalConnectedUsers });
 
       // Handle room joining
-socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-  try {
-    let room = await roomsCollection.findOne({ roomId });
+      socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+        try {
+          let room = await roomsCollection.findOne({ roomId });
 
-    if (!room) {
-      if (isCreator) {
-        room = {
-          roomId,
-          text: '',
-          messages: [],
-          users: {},
-          theme: 'light',
-          lastActivity: new Date(),
-          creatorId: userId,
-          isEditable: true,
-          editorMode: 'code',
-        };
-        await roomsCollection.insertOne(room);
-        console.log(`Room ${roomId} created by ${userName}`);
-      } else {
-        return callback({ error: 'Room does not exist.' });
-      }
-    }
+          if (!room) {
+            if (isCreator) {
+              room = {
+                roomId,
+                text: '',
+                messages: [],
+                users: {},
+                theme: 'light',
+                lastActivity: new Date(),
+                creatorId: userId,
+                isEditable: true,
+                editorMode: 'code',
+              };
+              await roomsCollection.insertOne(room);
+              console.log(`Room ${roomId} created by ${userName}`);
+            } else {
+              return callback({ error: 'Room does not exist.' });
+            }
+          }
 
-    // Add user to the room's user list
-    room.users[userId] = userName;
-    await roomsCollection.updateOne(
-      { roomId },
-      { $set: { users: room.users, lastActivity: new Date() } }
-    );
+          // Add user to the room's user list
+          room.users[userId] = userName;
+          await roomsCollection.updateOne(
+            { roomId },
+            { $set: { users: room.users, lastActivity: new Date() } }
+          );
 
-    socketUserMap.set(socket.id, { userId, roomId });
+          socketUserMap.set(socket.id, { userId, roomId });
 
-    const files = await uploadsCollection.find({ roomId }).toArray();
-    socket.join(roomId);
+          const files = await uploadsCollection.find({ roomId }).toArray();
+          socket.join(roomId);
 
-    // Emit room_joined event with the current text content
-    socket.emit('room_joined', {
-      text: room.text || '',  // Send the saved text content
-      users: room.users
-    });
+          // Emit room_joined event with the current text content
+          socket.emit('room_joined', {
+            text: room.text || '',  // Send the saved text content
+            users: room.users
+          });
 
-    // Send the current room details including the text content
-    callback({
-      success: true,
-      messages: room.messages,
-      theme: room.theme,
-      files,
-      users: room.users,
-      isCreator: room.creatorId === userId,
-      isEditable: room.isEditable,
-      editorMode: room.editorMode,
-      text: room.text || ''  // Include the text content in the callback
-    });
+          // Send the current room details including the text content
+          callback({
+            success: true,
+            messages: room.messages,
+            theme: room.theme,
+            files,
+            users: room.users,
+            isCreator: room.creatorId === userId,
+            isEditable: room.isEditable,
+            editorMode: room.editorMode,
+            text: room.text || ''  // Include the text content in the callback
+          });
 
-    console.log(`${userName} (${userId}) joined room ${roomId}`);
-  } catch (error) {
-    console.error('Error in join_room:', error);
-    callback({ error: 'Internal Server Error' });
-  }
-});
-
+          console.log(`${userName} (${userId}) joined room ${roomId}`);
+        } catch (error) {
+          console.error('Error in join_room:', error);
+          callback({ error: 'Internal Server Error' });
+        }
+      });
 
       // Add a new event handler for saving text content periodically
-socket.on('save_text_content', async ({ roomId, text }) => {
-  try {
-    await roomsCollection.updateOne(
-      { roomId },
-      { 
-        $set: { 
-          text: text,
-          lastActivity: new Date()
+      socket.on('save_text_content', async ({ roomId, text }) => {
+        try {
+          await roomsCollection.updateOne(
+            { roomId },
+            { 
+              $set: { 
+                text: text,
+                lastActivity: new Date()
+              }
+            }
+          );
+          console.log(`Saved text content for room ${roomId}`);
+        } catch (error) {
+          console.error('Error saving text content:', error);
         }
-      }
-    );
-    console.log(`Saved text content for room ${roomId}`);
-  } catch (error) {
-    console.error('Error saving text content:', error);
-  }
-});
-      
+      });
 
       // Handle toggle_editability
       socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
@@ -420,35 +409,37 @@ socket.on('save_text_content', async ({ roomId, text }) => {
           console.error('Error in change_theme:', error);
         }
       });
-      
-socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
-  try {
-    const room = await roomsCollection.findOne({ roomId });
-    if (room) {
-      // Save the current text to the room document in the database
-      await roomsCollection.updateOne(
-        { roomId },
-        { $set: { text: currentText, lastActivity: new Date() } }
-      );
-      console.log(`Saved text for room ${roomId} by user ${userId}`);
-    }
-  } catch (error) {
-    console.error('Error saving editor content on disconnect:', error);
-  }
-});
+
+      // Handle editor content
+      socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
+        try {
+          const room = await roomsCollection.findOne({ roomId });
+          if (room) {
+            // Save the current text to the room document in the database
+            await roomsCollection.updateOne(
+              { roomId },
+              { $set: { text: currentText, lastActivity: new Date() } }
+            );
+            console.log(`Saved text for room ${roomId} by user ${userId}`);
+          }
+        } catch (error) {
+          console.error('Error saving editor content:', error);
+        }
+      });
+
       // Modify the disconnect handler to save the final text content
       socket.on('disconnect', async () => {
         console.log(`User disconnected: ${socket.id}`);
-        
+
         const userInfo = socketUserMap.get(socket.id);
         if (userInfo) {
           const { roomId, userId } = userInfo;
-          
+
           // Get the room and check if this is the last user
           const room = await roomsCollection.findOne({ roomId });
           if (room) {
             delete room.users[userId];
-            
+
             // If this was the last user, ensure we save the final text state
             if (Object.keys(room.users).length === 0) {
               const finalText = room.text; // Make sure to capture the final text state
@@ -473,10 +464,10 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
                 }
               );
             }
-            
+
             io.emit('room_users', { roomId, users: room.users });
           }
-          
+
           socketUserMap.delete(socket.id);
         }
 
@@ -484,7 +475,7 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
         const totalConnectedUsers = await activeUsersCollection.countDocuments();
         io.emit('status_update', { totalConnectedUsers });
       });
-
+    });
 
     // ================================
     // ===== Scheduled Cleanup Task =====
@@ -514,18 +505,20 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
             const filename = path.basename(file.fileUrl);
             const filePath = path.join(uploadsDir, filename);
 
-            fs.unlink(filePath, (err) => {
-              if (err) {
-                console.error(`Failed to delete file ${filename} from filesystem:`, err);
-              } else {
-                console.log(`Deleted file ${filename} from filesystem.`);
-              }
-            });
+            try {
+              // Use fs.promises.unlink for consistency with async/await
+              await fs.promises.unlink(filePath);
+              console.log(`Deleted file ${filename} from filesystem.`);
+            } catch (err) {
+              console.error(`Failed to delete file ${filename} from filesystem:`, err);
+            }
           }
 
+          // Delete files from database
           const deleteFilesResult = await uploadsCollection.deleteMany({ roomId });
           console.log(`Deleted ${deleteFilesResult.deletedCount} file(s) from uploads collection for room ${roomId}.`);
 
+          // Delete room from database
           const deleteRoomResult = await roomsCollection.deleteOne({ roomId });
           if (deleteRoomResult.deletedCount === 1) {
             console.log(`Successfully deleted room ${roomId} from rooms collection.`);
@@ -533,9 +526,10 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
             console.warn(`Failed to delete room ${roomId} from rooms collection.`);
           }
 
-          io.to(roomId).emit('room_deleted', { 
+          // Emit a deletion event (if users are still connected)
+          io.to(roomId).emit('room_deleted', {
             message: 'This room has been deleted due to inactivity.',
-            deleteAfter: new Date()
+            deleteAfter: new Date(),
           });
         }
       } catch (error) {
@@ -543,16 +537,29 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
       }
     });
 
-    const PORT = process.env.PORT || 4000;
-    server.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-    });
-  });
+    // ===============================
+    // ===== Start the Server ========
+    // ===============================
+    async function startServer() {
+      try {
+        // Connect to MongoDB
+        await client.connect();
+        console.log('Connected to MongoDB');
+        const db = client.db('syncrolly');
+        roomsCollection = db.collection('rooms');
+        uploadsCollection = db.collection('uploads');
+        activeUsersCollection = db.collection('activeUsers');
 
-} catch (error) {
-  console.error('Error starting server:', error);
-  process.exit(1);
-}
-}
+        // Start the server
+        const PORT = process.env.PORT || 4000;
+        server.listen(PORT, '0.0.0.0', () => {
+          console.log(`Server is running on port ${PORT}`);
+        });
+      } catch (error) {
+        console.error('Error starting server:', error);
+        process.exit(1);
+      }
+    }
 
-startServer();
+    // Call startServer to initialize the application
+    startServer();
