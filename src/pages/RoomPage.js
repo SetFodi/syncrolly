@@ -119,6 +119,19 @@ useEffect(() => {
   }
 }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible]);
 
+useEffect(() => {
+  socket.on('room_joined', (roomData) => {
+    console.log('Room data:', roomData);
+    if (roomData.text) {
+      // Insert the text into the Yjs document
+      ydoc.getText('shared-text').insert(0, roomData.text);
+    }
+  });
+
+  return () => {
+    socket.off('room_joined');
+  };
+}, []);
 
   // Handle Awareness State
   useEffect(() => {
