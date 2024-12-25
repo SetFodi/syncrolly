@@ -229,30 +229,29 @@ async function startServer() {
       io.emit('status_update', { totalConnectedUsers });
 
       // Handle room joining
-      socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-        try {
-          let room = await roomsCollection.findOne({ roomId });
+  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+    try {
+      let room = await roomsCollection.findOne({ roomId });
 
-          if (!room) {
-            if (isCreator) {
-              room = {
-                roomId,
-                text: '',
-                messages: [],
-                users: {}, // User list stored here
-                theme: 'light',
-                lastActivity: new Date(),
-                creatorId: userId,
-                isEditable: true,
-                editorMode: 'code',
-              };
-              await roomsCollection.insertOne(room);
-              console.log(`Room ${roomId} created by ${userName}`);
-            } else {
-              return callback({ error: 'Room does not exist.' });
-            }
-          }
-
+      if (!room) {
+        if (isCreator) {
+          room = {
+            roomId,
+            text: '',  // Initialize text to empty when creating a room
+            messages: [],
+            users: {}, // User list stored here
+            theme: 'light',
+            lastActivity: new Date(),
+            creatorId: userId,
+            isEditable: true,
+            editorMode: 'code',
+          };
+          await roomsCollection.insertOne(room);
+          console.log(`Room ${roomId} created by ${userName}`);
+        } else {
+          return callback({ error: 'Room does not exist.' });
+        }
+      }
           // Add user to the room's user list
           room.users[userId] = userName;
           await roomsCollection.updateOne(
@@ -399,39 +398,49 @@ async function startServer() {
       });
 
       // When a user disconnects
-      socket.on('disconnect', async () => {
-        console.log(`User disconnected: ${socket.id}`);
+  socket.on('disconnect', async () => {
+    console.log(`User disconnected: ${socket.id}`);
 
-        // Remove the user from MongoDB
-        await activeUsersCollection.deleteOne({ socketId: socket.id });
+    // Get user info from socketUserMap
+    const userInfo = socketUserMap.get(socket.id);
+    if (userInfo) {
+      const { roomId, userId } = userInfo;
 
-        // Get user info from socketUserMap
-        const userInfo = socketUserMap.get(socket.id);
-        if (userInfo) {
-          const { roomId, userId } = userInfo;
+      // Get the room to save the editor text
+      const room = await roomsCollection.findOne({ roomId });
+      if (room) {
+        const currentText = /* Logic to get current text from CodeMirror on the client */;
+        
+        // Save the current text to the database
+        await roomsCollection.updateOne(
+          { roomId },
+          { $set: { text: currentText, lastActivity: new Date() } }
+        );
+        
+        console.log(`Text saved for room ${roomId} by user ${userId}`);
+      }
 
-          // Remove user from the room's user list
-          const room = await roomsCollection.findOne({ roomId });
-          if (room && room.users[userId]) {
-            delete room.users[userId];
-            await roomsCollection.updateOne(
-              { roomId },
-              { $set: { users: room.users, lastActivity: new Date() } }
-            );
+      // Remove user from MongoDB and update room users
+      if (room && room.users[userId]) {
+        delete room.users[userId];
+        await roomsCollection.updateOne(
+          { roomId },
+          { $set: { users: room.users, lastActivity: new Date() } }
+        );
 
-            // Emit updated user list to all clients
-            io.emit('room_users', { roomId, users: room.users });
-          }
+        // Emit updated user list to all clients
+        io.emit('room_users', { roomId, users: room.users });
+      }
 
-          // Remove from socketUserMap
-          socketUserMap.delete(socket.id);
-        }
+      // Remove from socketUserMap
+      socketUserMap.delete(socket.id);
+    }
 
-        // Emit the updated user count
-        const totalConnectedUsers = await activeUsersCollection.countDocuments();
-        io.emit('status_update', { totalConnectedUsers });
-      });
-    });
+    // Emit the updated user count
+    const totalConnectedUsers = await activeUsersCollection.countDocuments();
+    io.emit('status_update', { totalConnectedUsers });
+  });
+});
 
     // ================================
     // ===== Scheduled Cleanup Task =====
