@@ -415,48 +415,51 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
   }
 });
       // When a user disconnects
-  socket.on('disconnect', async () => {
-  console.log(`User disconnected: ${socket.id}`);
+      socket.on('disconnect', async () => {
+        console.log(`User disconnected: ${socket.id}`);
 
-  // Get user info from socketUserMap
-  const userInfo = socketUserMap.get(socket.id);
-  if (userInfo) {
-    const { roomId, userId } = userInfo;
+        // Get user info from socketUserMap
+        const userInfo = socketUserMap.get(socket.id);
+        if (userInfo) {
+          const { roomId, userId } = userInfo;
 
-    // Now the editor content is saved via `send_editor_content`, no need to save it here
-    // Remove user from MongoDB and update room users
-    const room = await roomsCollection.findOne({ roomId });
-    if (room && room.users[userId]) {
-      delete room.users[userId];
-      await roomsCollection.updateOne(
-        { roomId },
-        { $set: { users: room.users, lastActivity: new Date() } }
-      );
+          // Remove user from MongoDB and update room users
+          const room = await roomsCollection.findOne({ roomId });
+          if (room && room.users[userId]) {
+            delete room.users[userId];
+            await roomsCollection.updateOne(
+              { roomId },
+              { $set: { users: room.users, lastActivity: new Date() } }
+            );
 
-      // Emit updated user list to all clients
-      io.emit('room_users', { roomId, users: room.users });
-    }
+            // Emit updated user list to all clients
+            io.emit('room_users', { roomId, users: room.users });
+          }
 
-    // Remove from socketUserMap
-    socketUserMap.delete(socket.id);
-  }
+          // Remove from socketUserMap
+          socketUserMap.delete(socket.id);
+        }
 
-  // Emit the updated user count
-  const totalConnectedUsers = await activeUsersCollection.countDocuments();
-  io.emit('status_update', { totalConnectedUsers });
-});
+        // Remove the disconnected user from activeUsersCollection
+        await activeUsersCollection.deleteOne({ socketId: socket.id });
+
+        // Emit the updated user count
+        const totalConnectedUsers = await activeUsersCollection.countDocuments();
+        io.emit('status_update', { totalConnectedUsers });
+      });
+    });
+
 
     // ================================
     // ===== Scheduled Cleanup Task =====
     // ================================
-    cron.schedule('0 * * * *', async () => { // Runs every hour at minute 0
+        cron.schedule('0 * * * *', async () => {
       try {
         const now = new Date();
-        const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
+        const cutoffTime = new Date(now.getTime() - 72 * 60 * 60 * 1000);
 
         console.log(`Running scheduled task to delete inactive rooms. Current time: ${now}`);
 
-        // Find rooms with lastActivity older than 72 hours
         const inactiveRooms = await roomsCollection.find({ lastActivity: { $lt: cutoffTime } }).toArray();
 
         if (inactiveRooms.length === 0) {
@@ -469,10 +472,8 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
         for (const room of inactiveRooms) {
           const { roomId } = room;
 
-          // Find all files associated with this room
           const associatedFiles = await uploadsCollection.find({ roomId }).toArray();
 
-          // Delete files from the filesystem
           for (const file of associatedFiles) {
             const filename = path.basename(file.fileUrl);
             const filePath = path.join(uploadsDir, filename);
@@ -486,11 +487,9 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
             });
           }
 
-          // Delete files from the uploads collection
           const deleteFilesResult = await uploadsCollection.deleteMany({ roomId });
           console.log(`Deleted ${deleteFilesResult.deletedCount} file(s) from uploads collection for room ${roomId}.`);
 
-          // Delete the room from the rooms collection
           const deleteRoomResult = await roomsCollection.deleteOne({ roomId });
           if (deleteRoomResult.deletedCount === 1) {
             console.log(`Successfully deleted room ${roomId} from rooms collection.`);
@@ -498,27 +497,22 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
             console.warn(`Failed to delete room ${roomId} from rooms collection.`);
           }
 
-          // Notify connected clients that the room has been deleted
           io.to(roomId).emit('room_deleted', { message: 'This room has been deleted due to inactivity.' });
         }
-
       } catch (error) {
         console.error('Error during scheduled room deletion:', error);
       }
     });
 
-    // ======================
-    // ===== Start Server =====
-    // ======================
-     const PORT = process.env.PORT || 4000;
+    const PORT = process.env.PORT || 4000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
     });
 
   } catch (error) {
     console.error('Error starting server:', error);
-    process.exit(1); // Exit the process if the server fails to start
+    process.exit(1);
   }
 }
 
-startServer(); // Ensure this is invoked correctly to start the server
+startServer();
