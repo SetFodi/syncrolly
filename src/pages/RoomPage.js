@@ -51,7 +51,7 @@ function RoomPageContent() {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
   const [showReminder, setShowReminder] = useState(false);
-
+  const [syncTimeout, setSyncTimeout] = useState(false);
   const backendUrl = process.env.REACT_APP_BACKEND_URL;
   console.log('Backend URL:', backendUrl);
 
@@ -117,7 +117,7 @@ useEffect(() => {
       socket.off('room_deleted');
     };
   }
-}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible]);
+}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
 // Add a new effect to handle text content saving
 useEffect(() => {
@@ -203,7 +203,17 @@ useEffect(() => {
       };
     }
   }, [isNameSet, userName, awareness, storedUserId]);
+  
+useEffect(() => {
+  if (loading) {
+    const timer = setTimeout(() => {
+      setSyncTimeout(true);
+      setLoading(false);
+    }, 10000); // 10 second timeout
 
+    return () => clearTimeout(timer);
+  }
+}, [loading]);
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -532,11 +542,15 @@ const editorExtensions = useMemo(() => {
               readOnly={!(isEditable || isCreator)}
               aria-label="Code Editor"
             />
-            {!isYjsSynced && (
-              <div className={styles['yjs-loading-overlay']}>
-                <p>Synchronizing editor content...</p>
-              </div>
-            )}
+            {!isYjsSynced && loading && (
+  <div className={styles['yjs-loading-overlay']}>
+    <p>
+      {syncTimeout ? 
+        "Synchronization is taking longer than usual. The editor will be available shortly." : 
+        "Synchronizing editor content..."}
+    </p>
+  </div>
+)}
           </div>
 
           {showReminder && (
