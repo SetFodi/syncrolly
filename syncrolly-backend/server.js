@@ -251,10 +251,9 @@ const io = new Server(server, {
             { $set: { users: room.users, lastActivity: new Date() } }
           );
 
-          socketUserMap.set(socket.id, { userId, roomId });
-
-          const files = await uploadsCollection.find({ roomId }).toArray();
-          socket.join(roomId);
+   socketUserMap.set(socket.id, { userId, roomId });
+    const files = await uploadsCollection.find({ roomId }).toArray();
+    socket.join(roomId);
 
           // Emit room_joined event with the current text content
           socket.emit('room_joined', {
@@ -263,24 +262,22 @@ const io = new Server(server, {
           });
 
           // Send the current room details including the text content
-          callback({
-            success: true,
-            messages: room.messages,
-            theme: room.theme,
-            files,
-            users: room.users,
-            isCreator: room.creatorId === userId,
-            isEditable: room.isEditable,
-            editorMode: room.editorMode,
-            text: room.text || ''  // Include the text content in the callback
-          });
-
-          console.log(`${userName} (${userId}) joined room ${roomId}`);
-        } catch (error) {
-          console.error('Error in join_room:', error);
-          callback({ error: 'Internal Server Error' });
-        }
-      });
+  callback({
+      success: true,
+      messages: room.messages,
+      theme: room.theme,
+      files,
+      users: room.users,
+      isCreator: room.creatorId === userId,
+      isEditable: room.isEditable,
+      editorMode: room.editorMode,
+      text: room.text || ''
+    });
+  } catch (error) {
+    console.error('Error in join_room:', error);
+    callback({ error: 'Internal Server Error' });
+  }
+});
 
       // Add a new event handler for saving text content periodically
       socket.on('save_text_content', async ({ roomId, text }) => {
