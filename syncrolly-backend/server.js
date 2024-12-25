@@ -237,9 +237,9 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       if (isCreator) {
         room = {
           roomId,
-          text: '',  // Initialize text to empty when creating a room
+          text: '',
           messages: [],
-          users: {}, // User list stored here
+          users: {},
           theme: 'light',
           lastActivity: new Date(),
           creatorId: userId,
@@ -260,16 +260,18 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       { $set: { users: room.users, lastActivity: new Date() } }
     );
 
-    // Map socket.id to userId and roomId
     socketUserMap.set(socket.id, { userId, roomId });
 
     const files = await uploadsCollection.find({ roomId }).toArray();
     socket.join(roomId);
 
-    // Emit updated user list to all clients
-    io.emit('room_users', { roomId, users: room.users });
+    // Emit room_joined event with the current text content
+    socket.emit('room_joined', {
+      text: room.text || '',  // Send the saved text content
+      users: room.users
+    });
 
-    // Send the current room details including the user list
+    // Send the current room details including the text content
     callback({
       success: true,
       messages: room.messages,
@@ -279,6 +281,7 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       isCreator: room.creatorId === userId,
       isEditable: room.isEditable,
       editorMode: room.editorMode,
+      text: room.text || ''  // Include the text content in the callback
     });
 
     console.log(`${userName} (${userId}) joined room ${roomId}`);
@@ -288,6 +291,25 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
   }
 });
 
+
+      // Add a new event handler for saving text content periodically
+socket.on('save_text_content', async ({ roomId, text }) => {
+  try {
+    await roomsCollection.updateOne(
+      { roomId },
+      { 
+        $set: { 
+          text: text,
+          lastActivity: new Date()
+        }
+      }
+    );
+    console.log(`Saved text content for room ${roomId}`);
+  } catch (error) {
+    console.error('Error saving text content:', error);
+  }
+});
+      
 
       // Handle toggle_editability
       socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
@@ -414,40 +436,54 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
     console.error('Error saving editor content on disconnect:', error);
   }
 });
-      // When a user disconnects
-      socket.on('disconnect', async () => {
-        console.log(`User disconnected: ${socket.id}`);
-
-        // Get user info from socketUserMap
-        const userInfo = socketUserMap.get(socket.id);
-        if (userInfo) {
-          const { roomId, userId } = userInfo;
-
-          // Remove user from MongoDB and update room users
-          const room = await roomsCollection.findOne({ roomId });
-          if (room && room.users[userId]) {
-            delete room.users[userId];
-            await roomsCollection.updateOne(
-              { roomId },
-              { $set: { users: room.users, lastActivity: new Date() } }
-            );
-
-            // Emit updated user list to all clients
-            io.emit('room_users', { roomId, users: room.users });
+      // Modify the disconnect handler to save the final text content
+socket.on('disconnect', async () => {
+  console.log(`User disconnected: ${socket.id}`);
+  
+  const userInfo = socketUserMap.get(socket.id);
+  if (userInfo) {
+    const { roomId, userId } = userInfo;
+    
+    // Get the room and check if this is the last user
+    const room = await roomsCollection.findOne({ roomId });
+    if (room) {
+      delete room.users[userId];
+      
+      // If this was the last user, ensure we save the final text state
+      if (Object.keys(room.users).length === 0) {
+        const finalText = room.text; // Make sure to capture the final text state
+        await roomsCollection.updateOne(
+          { roomId },
+          { 
+            $set: { 
+              users: room.users,
+              text: finalText,
+              lastActivity: new Date()
+            }
           }
+        );
+      } else {
+        await roomsCollection.updateOne(
+          { roomId },
+          { 
+            $set: { 
+              users: room.users,
+              lastActivity: new Date()
+            }
+          }
+        );
+      }
+      
+      io.emit('room_users', { roomId, users: room.users });
+    }
+    
+    socketUserMap.delete(socket.id);
+  }
 
-          // Remove from socketUserMap
-          socketUserMap.delete(socket.id);
-        }
-
-        // Remove the disconnected user from activeUsersCollection
-        await activeUsersCollection.deleteOne({ socketId: socket.id });
-
-        // Emit the updated user count
-        const totalConnectedUsers = await activeUsersCollection.countDocuments();
-        io.emit('status_update', { totalConnectedUsers });
-      });
-    });
+  await activeUsersCollection.deleteOne({ socketId: socket.id });
+  const totalConnectedUsers = await activeUsersCollection.countDocuments();
+  io.emit('status_update', { totalConnectedUsers });
+});
 
 
     // ================================
