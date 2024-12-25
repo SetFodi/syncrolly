@@ -175,16 +175,7 @@ useEffect(() => {
   };
 }, [ydoc, roomId, storedUserId]);  
 
-    // Observe text changes with debouncing
-    const debouncedObserver = debounce(observer, 1000);
-    ydoc.getText('shared-text').observe(debouncedObserver);
 
-    return () => {
-      // Clean up observer
-      ydoc.getText('shared-text').unobserve(debouncedObserver);
-    };
-  }
-}, [isNameSet, ydoc, roomId]);
   // Handle Awareness State
   useEffect(() => {
     if (isNameSet && awareness) {
