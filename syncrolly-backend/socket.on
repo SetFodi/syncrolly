@@ -510,14 +510,15 @@ socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
     // ======================
     // ===== Start Server =====
     // ======================
-    const PORT = process.env.PORT || 4000;
+     const PORT = process.env.PORT || 4000;
     server.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);
     });
+
   } catch (error) {
     console.error('Error starting server:', error);
-    process.exit(1);
+    process.exit(1); // Exit the process if the server fails to start
   }
 }
 
-startServer(); // Start the backend Express server
+startServer(); // Ensure this is invoked correctly to start the server
