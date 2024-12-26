@@ -204,6 +204,23 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
   }
 });
 
+async function saveContentToMongo(roomId, content) {
+  try {
+    await roomsCollection.updateOne(
+      { roomId },
+      { 
+        $set: { 
+          text: content,
+          lastActivity: new Date()
+        }
+      },
+      { upsert: true }
+    );
+    console.log(`Content saved to MongoDB for room ${roomId}`);
+  } catch (error) {
+    console.error('Error saving content to MongoDB:', error);
+  }
+}
 // ========================
 // ===== Socket.IO Events =====
 // ========================
@@ -216,9 +233,18 @@ io.on('connection', async (socket) => {
   // Emit the total connected users count to all clients
   const totalConnectedUsers = await activeUsersCollection.countDocuments();
   io.emit('status_update', { totalConnectedUsers });
-
+socket.on('content_update', async ({ roomId, content }) => {
+    try {
+      await saveContentToMongo(roomId, content);
+      
+      // Broadcast to other clients in the room
+      socket.to(roomId).emit('content_synced', { content });
+    } catch (error) {
+      console.error('Error handling content update:', error);
+    }
+  });
   // Handle room joining
-  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
     try {
       let room = await roomsCollection.findOne({ roomId });
 
@@ -236,13 +262,12 @@ io.on('connection', async (socket) => {
             editorMode: 'code',
           };
           await roomsCollection.insertOne(room);
-          console.log(`Room ${roomId} created by ${userName}`);
         } else {
           return callback({ error: 'Room does not exist.' });
         }
       }
 
-      // Add user to the room's user list
+      // Add user to room
       room.users[userId] = userName;
       await roomsCollection.updateOne(
         { roomId },
@@ -253,16 +278,7 @@ io.on('connection', async (socket) => {
       const files = await uploadsCollection.find({ roomId }).toArray();
       socket.join(roomId);
 
-      // **Remove or Comment Out Yjs Text Handling**
-      /*
-      // Emit room_joined event with the current text content
-      socket.emit('room_joined', {
-        text: room.text || '',  // Send the saved text content
-        users: room.users
-      });
-      */
-
-      // Send the current room details without Yjs text
+      // Send complete room state including text content
       callback({
         success: true,
         messages: room.messages,
@@ -272,13 +288,15 @@ io.on('connection', async (socket) => {
         isCreator: room.creatorId === userId,
         isEditable: room.isEditable,
         editorMode: room.editorMode,
-        // text: room.text || '' // **Remove this line**
+        text: room.text || ''
       });
     } catch (error) {
       console.error('Error in join_room:', error);
       callback({ error: 'Internal Server Error' });
     }
   });
+});
+
 
   // Handle toggle_editability
   socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
