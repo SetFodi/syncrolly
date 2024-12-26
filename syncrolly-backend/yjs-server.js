@@ -62,17 +62,20 @@ wss.on('connection', async (conn, req) => {
     ydoc = documents.get(roomName);
   } else {
     ydoc = new Y.Doc();
-    documents.set(roomName, ydoc);
     
     // Load persisted document if available
     try {
       const persistedDoc = await persistence.getYDoc(roomName);
       if (persistedDoc) {
+        // Apply the persisted state to the new document
         Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
       }
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
     }
+    
+    // Store the document in memory
+    documents.set(roomName, ydoc);
   }
 
   // Initialize room data if not present
