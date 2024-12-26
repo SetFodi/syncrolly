@@ -48,7 +48,7 @@ html, body {
 }
 
 .logo-container {
-  order: 1;
+  /* Removed order property since it's not necessary anymore */
   display: flex;
   align-items: center;
 }
@@ -78,21 +78,21 @@ html, body {
 }
 
 .header h1 {
-  order: 2;
+  /* Removed order property */
   margin: 0;
   font-size: 1.8rem;
   color: inherit;
 }
 
 .chat-toggle {
-  order: 3;
+  /* Removed order property */
   display: flex;
   align-items: center;
   gap: 15px;
 }
 
 .toggle-btn {
-  order: 4;
+  /* Removed order property */
   background-color: #28a745;
   color: #fff;
   border: none;
@@ -140,11 +140,14 @@ html, body {
 }
 
 .editor-toggle {
-  order: 5;
+  /* Removed order property since it's not necessary anymore */
   display: flex;
   align-items: center;
 }
 
+/* Removed .current-editor-mode styles as they are no longer used */
+
+/* Chat, Files, Download Buttons */
 .chat-btn,
 .files-btn,
 .download-btn {
@@ -196,8 +199,11 @@ html, body {
   background-color: #218838;
 }
 
+/* ============================= */
+/* Theme Toggle */
+/* ============================= */
 .theme-toggle {
-  order: 7;
+  /* Removed order: 7; */
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -215,18 +221,6 @@ html, body {
 .theme-btn:hover {
   color: #007bff;
   transform: scale(1.2);
-}
-
-.current-editor-mode {
-  order: 7;
-  margin-top: 10px;
-  margin-right: 50px;
-  font-size: 14px;
-  color: #555;
-}
-
-.room-container.dark .current-editor-mode {
-  color: #fff;
 }
 
 /* ============================= */
@@ -868,7 +862,6 @@ html, body {
 /* ============================= */
 
 .language-select {
-  order: 5;
   display: flex;
   align-items: center;
   gap: 8px;
