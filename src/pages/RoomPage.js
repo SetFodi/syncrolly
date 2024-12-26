@@ -45,10 +45,12 @@ function RoomPageContent() {
   const [fileInput, setFileInput] = useState(null);
   const [isEditable, setIsEditable] = useState(false);
   const [loading, setLoading] = useState(isNameSet);
+  const [isCodeMode, setIsCodeMode] = useState(true); // Default to code mode
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
+  const [showReminder, setShowReminder] = useState(false);
   const [syncTimeout, setSyncTimeout] = useState(false);
   const backendUrl = process.env.REACT_APP_BACKEND_URL;
   console.log('Backend URL:', backendUrl);
@@ -68,141 +70,111 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-    if (isNameSet) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+useEffect(() => {
+  if (isNameSet) {
+    setLoading(true);
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          // Removed: setIsCodeMode(response.editorMode === 'code');
-          console.log('Initial isEditable state:', response.isEditable);
-          // Removed: console.log('Initial editor mode:', response.editorMode);
-          setLoading(false);
-        }
-      });
+    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+      console.log('join_room response:', response);
+      if (response.error) {
+        alert(response.error);
+        setLoading(false);
+        return;
+      }
+      if (response.success) {
+        console.log('Joined room successfully:', response);
+        setFiles(response.files);
+        setMessages(response.messages);
+        setIsEditable(response.isEditable);
+        setIsCreator(response.isCreator);
+        setIsCodeMode(response.editorMode === 'code');
+        console.log('Initial isEditable state:', response.isEditable);
+        console.log('Initial editor mode:', response.editorMode);
+        setLoading(false);
+      }
+    });
 
-      // Listen for editability changes
-      socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
-        console.log(`Editability changed to: ${newIsEditable}`);
-        setIsEditable(newIsEditable);
-      });
-
-      // Listen for new messages
-      socket.on('receive_message', (message) => {
-        console.log('Received message:', message);
-        setMessages((prevMessages) => [...prevMessages, message]);
-
-        // If chat is not visible, set unread messages flag
-        if (!chatVisible) {
-          setHasUnreadMessages(true);
-        }
-      });
-
-      // Listen for typing indicators
-      socket.on('user_typing', ({ userId, userName }) => {
-        console.log(`${userName} is typing...`);
-        setTypingUsers((prevTypingUsers) => {
-          if (!prevTypingUsers.some(user => user.userId === userId)) {
-            return [...prevTypingUsers, { userId, userName }];
-          }
-          return prevTypingUsers;
-        });
-      });
-
-      socket.on('user_stopped_typing', ({ userId }) => {
-        console.log(`User ${userId} stopped typing.`);
-        setTypingUsers((prevTypingUsers) => prevTypingUsers.filter(user => user.userId !== userId));
-      });
-
-      socket.on('room_deleted', ({ message, deleteAfter }) => {
-        if (deleteAfter && new Date() > new Date(deleteAfter)) {
-          alert(message);
-          // Clear the content to sync with the deletion
-          ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
-          navigate('/');
-        } else {
-          alert(message);
-        }
-      });
-
-      return () => {
-        socket.off('new_file');
-        socket.off('receive_message');
-        socket.off('user_typing');
-        socket.off('user_stopped_typing');
-        // Removed: socket.off('editor_mode_changed');
-        socket.off('editable_state_changed'); // Clean up the new listener
-        socket.off('theme_changed');
-        socket.off('room_deleted');
-      };
-    }
-  }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
-
-  // Handle text content saving
-  useEffect(() => {
-    if (isNameSet && ydoc) {
-      const observer = () => {
-        const currentText = ydoc.getText('shared-text').toString();
-        socket.emit('save_text_content', { 
-          roomId,
-          text: currentText
-        });
-      };
-
-      const debouncedObserver = debounce(observer, 1000);
-      ydoc.getText('shared-text').observe(debouncedObserver);
-
-      return () => {
-        ydoc.getText('shared-text').unobserve(debouncedObserver);
-      };
-    }
-  }, [isNameSet, ydoc, roomId]);
-
-  // Handle room joined event
-  useEffect(() => {
-    socket.on('room_joined', (roomData) => {
-      console.log('Room data:', roomData);
-      if (roomData.text && ydoc) {
-        // Clear existing content first
-        const yText = ydoc.getText('shared-text');
-        yText.delete(0, yText.length);
-        // Insert the saved text
-        if (roomData.text.length > 0) {
-          yText.insert(0, roomData.text);
-        }
+    socket.on('room_deleted', ({ message, deleteAfter }) => {
+      if (deleteAfter && new Date() > new Date(deleteAfter)) {
+        alert(message);
+        // You can also clear the content here if you want to sync with the deletion
+        ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
+        navigate('/');
+      } else {
+        alert(message);
       }
     });
 
     return () => {
-      socket.off('room_joined');
+      socket.off('new_file');
+      socket.off('receive_message');
+      socket.off('user_typing');
+      socket.off('user_stopped_typing');
+      socket.off('editor_mode_changed');
+      socket.off('editable_state_changed');
+      socket.off('theme_changed');
+      socket.off('room_deleted');
     };
-  }, [ydoc]);
+  }
+}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
-  // Save editor content on unmount
-  useEffect(() => {
-    return () => {
-      if (ydoc) {
-        const finalText = ydoc.getText('shared-text').toString();
-        socket.emit('send_editor_content', {
-          roomId,
-          userId: storedUserId,
-          currentText: finalText
-        });
-      }
+// Add a new effect to handle text content saving
+useEffect(() => {
+  if (isNameSet && ydoc) {
+    // Set up observer for Yjs text changes
+    const observer = () => {
+      const currentText = ydoc.getText('shared-text').toString();
+      socket.emit('save_text_content', { 
+        roomId,
+        text: currentText
+      });
     };
-  }, [ydoc, roomId, storedUserId]);  
+
+    // Observe text changes with debouncing
+    const debouncedObserver = debounce(observer, 1000);
+    ydoc.getText('shared-text').observe(debouncedObserver);
+
+    return () => {
+      // Clean up observer
+      ydoc.getText('shared-text').unobserve(debouncedObserver);
+    };
+  }
+}, [isNameSet, ydoc, roomId]);
+
+  
+useEffect(() => {
+  socket.on('room_joined', (roomData) => {
+    console.log('Room data:', roomData);
+    if (roomData.text && ydoc) {
+      // Clear existing content first
+      const yText = ydoc.getText('shared-text');
+      yText.delete(0, yText.length);
+      // Insert the saved text
+      if (roomData.text.length > 0) {
+        yText.insert(0, roomData.text);
+      }
+    }
+  });
+
+  return () => {
+    socket.off('room_joined');
+  };
+}, [ydoc]);
+
+useEffect(() => {
+  return () => {
+    if (ydoc) {
+      const finalText = ydoc.getText('shared-text').toString();
+      socket.emit('send_editor_content', {
+        roomId,
+        userId: storedUserId,
+        currentText: finalText
+      });
+    }
+  };
+}, [ydoc, roomId, storedUserId]);  
+
 
   // Handle Awareness State
   useEffect(() => {
@@ -231,19 +203,17 @@ function RoomPageContent() {
       };
     }
   }, [isNameSet, userName, awareness, storedUserId]);
+  
+useEffect(() => {
+  if (loading) {
+    const timer = setTimeout(() => {
+      setSyncTimeout(true);
+      setLoading(false);
+    }, 10000); // 10 second timeout
 
-  // Handle synchronization timeout
-  useEffect(() => {
-    if (loading) {
-      const timer = setTimeout(() => {
-        setSyncTimeout(true);
-        setLoading(false);
-      }, 10000); // 10 second timeout
-
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
-
+    return () => clearTimeout(timer);
+  }
+}, [loading]);
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -257,8 +227,10 @@ function RoomPageContent() {
 
   // Handle Download
   const handleDownload = () => {
+    // Determine the file content based on the editor mode
     const content = ydoc.getText('shared-text').toString(); // Get content from Yjs document
 
+    // Map language to file extension
     const languageFileExtensions = {
       javascript: 'js',
       python: 'py',
@@ -269,12 +241,16 @@ function RoomPageContent() {
       text: 'txt'
     };
 
+    // Get the selected language from your editor's state
     const fileExtension = languageFileExtensions[selectedLanguage] || 'txt'; // Default to 'txt' if no match
 
+    // Create a Blob object with the content
     const blob = new Blob([content], { type: 'text/plain' });
+
+    // Create a link element and trigger the download
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension
+    link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension based on selectedLanguage
     link.click();
   };
 
@@ -286,8 +262,22 @@ function RoomPageContent() {
         alert(response.error);
       } else {
         console.log(`Editability toggled to ${response.isEditable}`);
-        setIsEditable(response.isEditable); // Update local state based on response
-        alert(`Room is now ${response.isEditable ? 'editable' : 'view-only'}.`);
+      }
+    });
+  };
+
+  // Handle Editor Mode Toggle
+  const handleToggleEditorMode = () => {
+    socket.emit('toggle_editor_mode', { roomId, userId: storedUserId }, (response) => {
+      if (response.error) {
+        alert(response.error);
+      } else if (response.success) {
+        console.log(`Editor mode toggled to ${response.editorMode}`);
+        if (response.editorMode === 'text') {
+          setShowReminder(true);  // Show the reminder when switching to text editor mode
+        } else {
+          setShowReminder(false);  // Hide the reminder when switching back to code editor mode
+        }
       }
     });
   };
@@ -311,7 +301,7 @@ function RoomPageContent() {
     formData.append('userId', storedUserId);
 
     try {
-      const response = await fetch(`${backendUrl}/upload/${roomId}`, {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/upload/${roomId}`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
@@ -353,7 +343,7 @@ function RoomPageContent() {
   // Handle File Deletion
   const handleDeleteFile = async (fileId) => {
     try {
-      const response = await fetch(`${backendUrl}/delete_file/${roomId}/${fileId}`, {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
         method: 'DELETE',
         mode: 'cors',
         credentials: 'include',
@@ -430,15 +420,17 @@ function RoomPageContent() {
   };
 
   // Editor Extensions
-  const editorExtensions = useMemo(() => {
-    const baseExtension = languageExtensions[selectedLanguage];
-    return [
-      baseExtension || markdown(), // Fallback to markdown if extension is undefined
-      EditorView.lineWrapping,
-      EditorView.editable.of(isEditable || isCreator),
-      yCollab(ydoc.getText('shared-text'), awareness, {}),
-    ];
-  }, [isEditable, isCreator, awareness, selectedLanguage, languageExtensions, ydoc]);
+// Editor Extensions
+const editorExtensions = useMemo(() => {
+  const baseExtension = isCodeMode ? languageExtensions[selectedLanguage] : markdown();
+  return [
+    baseExtension || markdown(), // Fallback to markdown if extension is undefined
+    EditorView.lineWrapping,
+    EditorView.editable.of(isEditable || isCreator),
+    yCollab(ydoc.getText('shared-text'), awareness, {}),
+  ];
+}, [isEditable, isCreator, isCodeMode, awareness, selectedLanguage, languageExtensions, ydoc]);
+
 
   return (
     <div className={`${styles['room-container']} ${styles[theme]}`}>
@@ -507,23 +499,39 @@ function RoomPageContent() {
               </button>
             </div>
 
-            {/* Language Selector */}
-            <div className={styles['language-select']}>
-              <label htmlFor="language-select">Language:</label>
-              <select
-                id="language-select"
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                aria-label="Select Language"
-              >
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
-                <option value="cpp">C/C++</option>
-                <option value="php">PHP</option>
-                <option value="markdown">Markdown</option>
-                <option value="json">JSON</option>
-                <option value="text">Text</option>
-              </select>
+            {isCreator && (
+              <div className={styles['editor-toggle']}>
+                <button onClick={handleToggleEditorMode} className={styles['toggle-editor-btn']} aria-label="Toggle Editor Mode">
+                  {isCodeMode ? 'Switch to Text Editor' : 'Switch to Code Editor'}
+                </button>
+              </div>
+            )}
+
+            {/* Language Selector after the editor-toggle */}
+            {isCodeMode && (
+              <div className={styles['language-select']}>
+                <label htmlFor="language-select">Language:</label>
+                <select
+                  id="language-select"
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  aria-label="Select Language"
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                  <option value="cpp">C/C++</option>
+                  <option value="php">PHP</option>
+                  <option value="markdown">Markdown</option>
+                  <option value="json">JSON</option>
+                  <option value="text">Text</option>
+                </select>
+              </div>
+            )}
+
+            <div className={styles['current-editor-mode']}>
+              <p>
+                Current Editor Mode: <strong>{isCodeMode ? 'Code Editor' : 'Plain Text Editor'}</strong>
+              </p>
             </div>
           </div>
 
@@ -535,15 +543,21 @@ function RoomPageContent() {
               aria-label="Code Editor"
             />
             {!isYjsSynced && loading && (
-              <div className={styles['yjs-loading-overlay']}>
-                <p>
-                  {syncTimeout ? 
-                    "Synchronization is taking longer than usual. The editor will be available shortly." : 
-                    "Synchronizing editor content..."}
-                </p>
-              </div>
-            )}
+  <div className={styles['yjs-loading-overlay']}>
+    <p>
+      {syncTimeout ? 
+        "Synchronization is taking longer than usual. The editor will be available shortly." : 
+        "Synchronizing editor content..."}
+    </p>
+  </div>
+)}
           </div>
+
+          {showReminder && (
+            <div className={styles['editor-reminder']}>
+              <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
+            </div>
+          )}
 
           <div className={styles['typing-indicator']}>
             {typingUsers.length > 0 && (
