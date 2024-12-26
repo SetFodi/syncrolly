@@ -1,5 +1,3 @@
-// yjs-server.js
-
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -93,23 +91,25 @@ wss.on('connection', async (conn, req) => {
     }
   }, 25000);
 
+  // Set up periodic persistence
   const persistenceInterval = setInterval(async () => {
-      try {
-        if (documents.has(roomName)) {
-          await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
-          console.log(`Auto-saved document ${roomName}`);
-        } else {
-          clearInterval(persistenceInterval);
-        }
-      } catch (error) {
-        console.error(`Error auto-saving document ${roomName}:`, error);
+    try {
+      if (documents.has(roomName)) {
+        await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
+        console.log(`Auto-saved document ${roomName}`);
+      } else {
+        clearInterval(persistenceInterval);
       }
-    }, PERSISTENCE_INTERVAL);
-  }
+    } catch (error) {
+      console.error(`Error auto-saving document ${roomName}:`, error);
+    }
+  }, PERSISTENCE_INTERVAL);
 
-        conn.on('error', (error) => {
+  // Handle WebSocket errors
+  conn.on('error', (error) => {
     console.error(`WebSocket error in room ${roomName}:`, error);
   });
+
   // Handle pong responses
   conn.on('pong', () => {
     console.log(`Pong received from client in room: ${roomName}`);
@@ -135,6 +135,7 @@ wss.on('connection', async (conn, req) => {
       }
     }
     clearInterval(keepAliveInterval);
+    clearInterval(persistenceInterval); // Clear the persistence interval
     broadcastRoomData();
   });
 
