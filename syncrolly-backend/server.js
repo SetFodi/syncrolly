@@ -295,7 +295,7 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       callback({ error: 'Internal Server Error' });
     }
   });
-});
+
 
 
   // Handle toggle_editability
