@@ -204,7 +204,6 @@ html, body {
 /* ============================= */
 .theme-toggle {
   /* Removed order: 7; */
-  margin-left: auto;
   display: flex;
   align-items: center;
 }
