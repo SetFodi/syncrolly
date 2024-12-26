@@ -69,38 +69,30 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-useEffect(() => {
-  if (isNameSet) {
-    setLoading(true);
-    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+  useEffect(() => {
+    if (isNameSet) {
+      setLoading(true);
+      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-      console.log('join_room response:', response);
-      if (response.error) {
-        alert(response.error);
-        setLoading(false);
-        return;
-      }
-      if (response.success) {
-        console.log('Joined room successfully:', response);
-        setFiles(response.files);
-        setMessages(response.messages);
-        setIsEditable(response.isEditable);
-        setIsCreator(response.isCreator);
-        
-        // Only set initial content if Yjs hasn't synced yet
-        if (ydoc && !hasInitialSync.current && response.text) {
-          const yText = ydoc.getText('shared-text');
-          if (yText.toString().length === 0) {
-            yText.delete(0, yText.length);
-            yText.insert(0, response.text);
-            hasInitialSync.current = true;
-          }
+      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+        console.log('join_room response:', response);
+        if (response.error) {
+          alert(response.error);
+          setLoading(false);
+          return;
         }
-        
-        setLoading(false);
-      }
-    });
+        if (response.success) {
+          console.log('Joined room successfully:', response);
+          setFiles(response.files);
+          setMessages(response.messages);
+          setIsEditable(response.isEditable);
+          setIsCreator(response.isCreator);
+          
+          // **Removed the manual Yjs document update to prevent duplication**
+          
+          setLoading(false);
+        }
+      });
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -159,60 +151,31 @@ useEffect(() => {
     }
   }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
-  // Handle text content saving
-  useEffect(() => {
-  if (isNameSet && ydoc && hasInitialSync.current) {
-    const observer = () => {
-      const currentText = ydoc.getText('shared-text').toString();
-      socket.emit('save_text_content', { 
-        roomId,
-        text: currentText
-      });
-    };
-
-    const debouncedObserver = debounce(observer, 1000);
-    ydoc.getText('shared-text').observe(debouncedObserver);
-
-    return () => {
-      ydoc.getText('shared-text').unobserve(debouncedObserver);
-    };
-  }
-}, [isNameSet, ydoc, roomId, hasInitialSync.current]);
+  // **Removed the useEffect that emits 'save_text_content' via Socket.IO to prevent duplication**
 
   // Handle room joined event
-useEffect(() => {
-  const handleRoomJoined = (roomData) => {
-    console.log('Room data:', roomData);
-    // Do not set content here, as it's now handled in the join_room callback
-  };
-
-  socket.on('room_joined', handleRoomJoined);
-
-  return () => {
-    socket.off('room_joined');
-  };
-}, [ydoc]);
-
-  
-useEffect(() => {
-  if (ydoc && isYjsSynced && !hasInitialSync.current) {
-    hasInitialSync.current = true;
-    console.log('Yjs initial sync completed');
-  }
-}, [ydoc, isYjsSynced])
-  // Save editor content on unmount
   useEffect(() => {
-    return () => {
-      if (ydoc) {
-        const finalText = ydoc.getText('shared-text').toString();
-        socket.emit('send_editor_content', {
-          roomId,
-          userId: storedUserId,
-          currentText: finalText
-        });
-      }
+    const handleRoomJoined = (roomData) => {
+      console.log('Room data:', roomData);
+      // Do not set content here, as it's now handled by Yjs WebSocket server
     };
-  }, [ydoc, roomId, storedUserId]);  
+
+    socket.on('room_joined', handleRoomJoined);
+
+    return () => {
+      socket.off('room_joined');
+    };
+  }, [ydoc]);
+
+    
+  useEffect(() => {
+    if (ydoc && isYjsSynced && !hasInitialSync.current) {
+      hasInitialSync.current = true;
+      console.log('Yjs initial sync completed');
+    }
+  }, [ydoc, isYjsSynced]);
+
+  // **Removed the useEffect that emits 'send_editor_content' on unmount**
 
   // Handle Awareness State
   useEffect(() => {
