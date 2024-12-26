@@ -1,3 +1,5 @@
+// yjs-server.js
+
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -7,7 +9,6 @@ const url = require('url');
 const Y = require('yjs');
 const path = require('path');
 const fs = require('fs');
-const documents = new Map();
 
 dotenv.config();
 
@@ -23,6 +24,8 @@ if (!fs.existsSync(persistenceDir)) {
 
 // Initialize LevelDB Persistence
 const persistence = new LeveldbPersistence(persistenceDir);
+
+const documents = new Map();
 
 // Create an HTTP server
 const server = http.createServer((req, res) => {
@@ -55,14 +58,14 @@ function broadcastRoomData() {
 wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'Unnamed Room';
-  
+
   // Initialize or get existing document
   let ydoc;
   if (documents.has(roomName)) {
     ydoc = documents.get(roomName);
   } else {
     ydoc = new Y.Doc();
-    
+
     // Load persisted document if available
     try {
       const persistedDoc = await persistence.getYDoc(roomName);
@@ -73,7 +76,7 @@ wss.on('connection', async (conn, req) => {
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
     }
-    
+
     // Store the document in memory
     documents.set(roomName, ydoc);
   }
@@ -122,7 +125,7 @@ wss.on('connection', async (conn, req) => {
   setupWSConnection(conn, req, {
     docName: roomName,
     gc: true,
-    ydoc: ydoc // Use our managed doc instance
+    persistence: persistence, // Use LevelDB persistence
   });
 });
 
