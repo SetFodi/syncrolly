@@ -93,6 +93,12 @@ function RoomPageContent() {
         }
       });
 
+      // Listen for editability changes
+      socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
+        console.log(`Editability changed to: ${newIsEditable}`);
+        setIsEditable(newIsEditable);
+      });
+
       socket.on('room_deleted', ({ message, deleteAfter }) => {
         if (deleteAfter && new Date() > new Date(deleteAfter)) {
           alert(message);
@@ -110,7 +116,7 @@ function RoomPageContent() {
         socket.off('user_typing');
         socket.off('user_stopped_typing');
         // Removed: socket.off('editor_mode_changed');
-        socket.off('editable_state_changed');
+        socket.off('editable_state_changed'); // Clean up the new listener
         socket.off('theme_changed');
         socket.off('room_deleted');
       };
