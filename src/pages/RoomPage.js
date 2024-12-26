@@ -69,30 +69,38 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-    if (isNameSet) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+useEffect(() => {
+  if (isNameSet) {
+    setLoading(true);
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
+    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+      console.log('join_room response:', response);
+      if (response.error) {
+        alert(response.error);
+        setLoading(false);
+        return;
+      }
+      if (response.success) {
+        console.log('Joined room successfully:', response);
+        setFiles(response.files);
+        setMessages(response.messages);
+        setIsEditable(response.isEditable);
+        setIsCreator(response.isCreator);
+        
+        // Only set initial content if Yjs hasn't synced yet
+        if (ydoc && !hasInitialSync.current && response.text) {
+          const yText = ydoc.getText('shared-text');
+          if (yText.toString().length === 0) {
+            yText.delete(0, yText.length);
+            yText.insert(0, response.text);
+            hasInitialSync.current = true;
+          }
         }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          // Removed: setIsCodeMode(response.editorMode === 'code');
-          console.log('Initial isEditable state:', response.isEditable);
-          // Removed: console.log('Initial editor mode:', response.editorMode);
-          setLoading(false);
-        }
-      });
+        
+        setLoading(false);
+      }
+    });
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -173,24 +181,25 @@ function RoomPageContent() {
 
   // Handle room joined event
 useEffect(() => {
-  socket.on('room_joined', (roomData) => {
+  const handleRoomJoined = (roomData) => {
     console.log('Room data:', roomData);
-    // Only set initial content if we haven't had a Yjs sync yet
-    if (ydoc && !hasInitialSync.current) {
-      const yText = ydoc.getText('shared-text');
-      // Only set content if Yjs document is empty
-      if (yText.toString().length === 0 && roomData.text) {
-        yText.delete(0, yText.length);
-        yText.insert(0, roomData.text);
-      }
-    }
-  });
+    // Do not set content here, as it's now handled in the join_room callback
+  };
 
-    return () => {
-      socket.off('room_joined');
-    };
-  }, [ydoc]);
+  socket.on('room_joined', handleRoomJoined);
 
+  return () => {
+    socket.off('room_joined');
+  };
+}, [ydoc]);
+
+  
+useEffect(() => {
+  if (ydoc && isYjsSynced && !hasInitialSync.current) {
+    hasInitialSync.current = true;
+    console.log('Yjs initial sync completed');
+  }
+}, [ydoc, isYjsSynced])
   // Save editor content on unmount
   useEffect(() => {
     return () => {
