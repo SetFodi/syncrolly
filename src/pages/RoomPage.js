@@ -99,6 +99,33 @@ function RoomPageContent() {
         setIsEditable(newIsEditable);
       });
 
+      // Listen for new messages
+      socket.on('receive_message', (message) => {
+        console.log('Received message:', message);
+        setMessages((prevMessages) => [...prevMessages, message]);
+
+        // If chat is not visible, set unread messages flag
+        if (!chatVisible) {
+          setHasUnreadMessages(true);
+        }
+      });
+
+      // Listen for typing indicators
+      socket.on('user_typing', ({ userId, userName }) => {
+        console.log(`${userName} is typing...`);
+        setTypingUsers((prevTypingUsers) => {
+          if (!prevTypingUsers.some(user => user.userId === userId)) {
+            return [...prevTypingUsers, { userId, userName }];
+          }
+          return prevTypingUsers;
+        });
+      });
+
+      socket.on('user_stopped_typing', ({ userId }) => {
+        console.log(`User ${userId} stopped typing.`);
+        setTypingUsers((prevTypingUsers) => prevTypingUsers.filter(user => user.userId !== userId));
+      });
+
       socket.on('room_deleted', ({ message, deleteAfter }) => {
         if (deleteAfter && new Date() > new Date(deleteAfter)) {
           alert(message);
@@ -260,6 +287,7 @@ function RoomPageContent() {
       } else {
         console.log(`Editability toggled to ${response.isEditable}`);
         setIsEditable(response.isEditable); // Update local state based on response
+        alert(`Room is now ${response.isEditable ? 'editable' : 'view-only'}.`);
       }
     });
   };
