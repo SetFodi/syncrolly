@@ -47,6 +47,7 @@ function RoomPageContent() {
   const [loading, setLoading] = useState(isNameSet);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
+  const hasInitialSync = useRef(false);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
   const [syncTimeout, setSyncTimeout] = useState(false);
@@ -152,38 +153,38 @@ function RoomPageContent() {
 
   // Handle text content saving
   useEffect(() => {
-    if (isNameSet && ydoc) {
-      const observer = () => {
-        const currentText = ydoc.getText('shared-text').toString();
-        socket.emit('save_text_content', { 
-          roomId,
-          text: currentText
-        });
-      };
+  if (isNameSet && ydoc && hasInitialSync.current) {
+    const observer = () => {
+      const currentText = ydoc.getText('shared-text').toString();
+      socket.emit('save_text_content', { 
+        roomId,
+        text: currentText
+      });
+    };
 
-      const debouncedObserver = debounce(observer, 1000);
-      ydoc.getText('shared-text').observe(debouncedObserver);
+    const debouncedObserver = debounce(observer, 1000);
+    ydoc.getText('shared-text').observe(debouncedObserver);
 
-      return () => {
-        ydoc.getText('shared-text').unobserve(debouncedObserver);
-      };
-    }
-  }, [isNameSet, ydoc, roomId]);
+    return () => {
+      ydoc.getText('shared-text').unobserve(debouncedObserver);
+    };
+  }
+}, [isNameSet, ydoc, roomId, hasInitialSync.current]);
 
   // Handle room joined event
-  useEffect(() => {
-    socket.on('room_joined', (roomData) => {
-      console.log('Room data:', roomData);
-      if (roomData.text && ydoc) {
-        // Clear existing content first
-        const yText = ydoc.getText('shared-text');
+useEffect(() => {
+  socket.on('room_joined', (roomData) => {
+    console.log('Room data:', roomData);
+    // Only set initial content if we haven't had a Yjs sync yet
+    if (ydoc && !hasInitialSync.current) {
+      const yText = ydoc.getText('shared-text');
+      // Only set content if Yjs document is empty
+      if (yText.toString().length === 0 && roomData.text) {
         yText.delete(0, yText.length);
-        // Insert the saved text
-        if (roomData.text.length > 0) {
-          yText.insert(0, roomData.text);
-        }
+        yText.insert(0, roomData.text);
       }
-    });
+    }
+  });
 
     return () => {
       socket.off('room_joined');
