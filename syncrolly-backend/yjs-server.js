@@ -24,7 +24,7 @@ if (!fs.existsSync(persistenceDir)) {
 
 // Initialize LevelDB Persistence
 const persistence = new LeveldbPersistence(persistenceDir);
-
+const PERSISTENCE_INTERVAL = 5000;
 const documents = new Map();
 
 // Create an HTTP server
@@ -57,27 +57,23 @@ function broadcastRoomData() {
 // Handle WebSocket connections
 wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
-  const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'Unnamed Room';
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0];
 
-  // Initialize or get existing document
   let ydoc;
   if (documents.has(roomName)) {
     ydoc = documents.get(roomName);
   } else {
     ydoc = new Y.Doc();
-
-    // Load persisted document if available
+    
     try {
       const persistedDoc = await persistence.getYDoc(roomName);
       if (persistedDoc) {
-        // Apply the persisted state to the new document
         Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
       }
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
     }
-
-    // Store the document in memory
+    
     documents.set(roomName, ydoc);
   }
 
@@ -97,35 +93,57 @@ wss.on('connection', async (conn, req) => {
     }
   }, 25000);
 
+  const persistenceInterval = setInterval(async () => {
+      try {
+        if (documents.has(roomName)) {
+          await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
+          console.log(`Auto-saved document ${roomName}`);
+        } else {
+          clearInterval(persistenceInterval);
+        }
+      } catch (error) {
+        console.error(`Error auto-saving document ${roomName}:`, error);
+      }
+    }, PERSISTENCE_INTERVAL);
+  }
+
+        conn.on('error', (error) => {
+    console.error(`WebSocket error in room ${roomName}:`, error);
+  });
   // Handle pong responses
   conn.on('pong', () => {
     console.log(`Pong received from client in room: ${roomName}`);
   });
 
   // Handle disconnection
-  conn.on('close', () => {
+  conn.on('close', async () => {
     console.log(`Client disconnected from room: ${roomName}`);
     if (roomData[roomName]) {
       roomData[roomName]--;
       if (roomData[roomName] <= 0) {
-        // Save final state before cleanup
-        persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc))
-          .then(() => {
-            documents.delete(roomName);
-            delete roomData[roomName];
-          })
-          .catch(console.error);
+        try {
+          // Final save before cleanup
+          await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
+          console.log(`Final save completed for room ${roomName}`);
+          
+          // Cleanup
+          documents.delete(roomName);
+          delete roomData[roomName];
+        } catch (error) {
+          console.error(`Error in final save for room ${roomName}:`, error);
+        }
       }
     }
     clearInterval(keepAliveInterval);
     broadcastRoomData();
   });
 
-  // Setup Yjs WebSocket connection
+  // Setup Yjs connection with enhanced options
   setupWSConnection(conn, req, {
     docName: roomName,
     gc: true,
-    persistence: persistence, // Use LevelDB persistence
+    gcFilter: () => false, // Disable garbage collection for better persistence
+    persistence: persistence,
   });
 });
 
