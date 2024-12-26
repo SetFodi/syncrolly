@@ -1,5 +1,3 @@
-// yjs-server.js
-
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -9,6 +7,7 @@ const url = require('url');
 const Y = require('yjs');
 const path = require('path');
 const fs = require('fs');
+const documents = new Map();
 
 dotenv.config();
 
@@ -17,14 +16,13 @@ const PORT = process.env.YJS_PORT || 1234;
 
 // Define the persistence directory
 const persistenceDir = path.join(__dirname, 'yjs-docs');
-
 // Create the directory if it doesn't exist
 if (!fs.existsSync(persistenceDir)) {
   fs.mkdirSync(persistenceDir);
 }
 
 // Initialize LevelDB Persistence
-const persistence = new LeveldbPersistence(persistenceDir); // Ensure this directory exists and is writable
+const persistence = new LeveldbPersistence(persistenceDir);
 
 // Create an HTTP server
 const server = http.createServer((req, res) => {
@@ -35,39 +33,53 @@ const server = http.createServer((req, res) => {
 // Initialize the WebSocket server instance
 const wss = new WebSocket.Server({ server });
 
-// Object to track active rooms and their client counts (optional)
+// Object to track active rooms and their client counts
 const roomData = {};
 
-// Function to broadcast room data to all connected clients (optional)
+// Function to broadcast room data to all connected clients
 function broadcastRoomData() {
   const activeRooms = Object.entries(roomData).map(([roomName, clients]) => ({
     roomName: roomName || 'Unnamed Room',
     clients,
   }));
   const message = JSON.stringify({ type: 'room_data', data: activeRooms });
-
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
-
   console.log('Active Rooms:', activeRooms);
 }
 
 // Handle WebSocket connections
-wss.on('connection', (conn, req) => {
+wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'Unnamed Room';
-  console.log(`Yjs Client connected to room: ${roomName}`);
+  
+  // Initialize or get existing document
+  let ydoc;
+  if (documents.has(roomName)) {
+    ydoc = documents.get(roomName);
+  } else {
+    ydoc = new Y.Doc();
+    documents.set(roomName, ydoc);
+    
+    // Load persisted document if available
+    try {
+      const persistedDoc = await persistence.getYDoc(roomName);
+      if (persistedDoc) {
+        Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
+      }
+    } catch (err) {
+      console.error(`Error loading document ${roomName}:`, err);
+    }
+  }
 
-  // Initialize room data if not present (optional)
+  // Initialize room data if not present
   if (!roomData[roomName]) {
     roomData[roomName] = 0;
   }
   roomData[roomName]++;
-
-  // Broadcast updated room data (optional)
   broadcastRoomData();
 
   // Keep connection alive with pings
@@ -77,8 +89,9 @@ wss.on('connection', (conn, req) => {
     } else {
       clearInterval(keepAliveInterval);
     }
-  }, 25000); // Ping every 25 seconds
+  }, 25000);
 
+  // Handle pong responses
   conn.on('pong', () => {
     console.log(`Pong received from client in room: ${roomName}`);
   });
@@ -89,30 +102,24 @@ wss.on('connection', (conn, req) => {
     if (roomData[roomName]) {
       roomData[roomName]--;
       if (roomData[roomName] <= 0) {
-        delete roomData[roomName];
+        // Save final state before cleanup
+        persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc))
+          .then(() => {
+            documents.delete(roomName);
+            delete roomData[roomName];
+          })
+          .catch(console.error);
       }
     }
-
-    // Broadcast updated room data (optional)
-    broadcastRoomData();
     clearInterval(keepAliveInterval);
+    broadcastRoomData();
   });
 
-  // Setup Yjs WebSocket connection with LevelDB Persistence
+  // Setup Yjs WebSocket connection
   setupWSConnection(conn, req, {
     docName: roomName,
-    persistence,
-    gc: true, // garbage collect
-  });
-
-  // After setupWSConnection, get the Yjs document and attach an observer (optional)
-  persistence.getYDoc(roomName).then((ydoc) => {
-    ydoc.on('update', (update, origin) => {
-      console.log(`Document for room ${roomName} updated`);
-      // Implement any additional logic if needed
-    });
-  }).catch(err => {
-    console.error(`Error getting YDoc for room ${roomName}:`, err);
+    gc: true,
+    ydoc: ydoc // Use our managed doc instance
   });
 });
 
