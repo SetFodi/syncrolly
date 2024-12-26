@@ -96,7 +96,7 @@ function RoomPageContent() {
       socket.on('room_deleted', ({ message, deleteAfter }) => {
         if (deleteAfter && new Date() > new Date(deleteAfter)) {
           alert(message);
-          // You can also clear the content here if you want to sync with the deletion
+          // Clear the content to sync with the deletion
           ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
           navigate('/');
         } else {
@@ -117,10 +117,9 @@ function RoomPageContent() {
     }
   }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
-  // Add a new effect to handle text content saving
+  // Handle text content saving
   useEffect(() => {
     if (isNameSet && ydoc) {
-      // Set up observer for Yjs text changes
       const observer = () => {
         const currentText = ydoc.getText('shared-text').toString();
         socket.emit('save_text_content', { 
@@ -129,18 +128,16 @@ function RoomPageContent() {
         });
       };
 
-      // Observe text changes with debouncing
       const debouncedObserver = debounce(observer, 1000);
       ydoc.getText('shared-text').observe(debouncedObserver);
 
       return () => {
-        // Clean up observer
         ydoc.getText('shared-text').unobserve(debouncedObserver);
       };
     }
   }, [isNameSet, ydoc, roomId]);
 
-    
+  // Handle room joined event
   useEffect(() => {
     socket.on('room_joined', (roomData) => {
       console.log('Room data:', roomData);
@@ -160,6 +157,7 @@ function RoomPageContent() {
     };
   }, [ydoc]);
 
+  // Save editor content on unmount
   useEffect(() => {
     return () => {
       if (ydoc) {
@@ -172,7 +170,6 @@ function RoomPageContent() {
       }
     };
   }, [ydoc, roomId, storedUserId]);  
-
 
   // Handle Awareness State
   useEffect(() => {
@@ -201,7 +198,8 @@ function RoomPageContent() {
       };
     }
   }, [isNameSet, userName, awareness, storedUserId]);
-  
+
+  // Handle synchronization timeout
   useEffect(() => {
     if (loading) {
       const timer = setTimeout(() => {
@@ -212,7 +210,7 @@ function RoomPageContent() {
       return () => clearTimeout(timer);
     }
   }, [loading]);
-  
+
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -226,10 +224,8 @@ function RoomPageContent() {
 
   // Handle Download
   const handleDownload = () => {
-    // Determine the file content based on the editor mode
     const content = ydoc.getText('shared-text').toString(); // Get content from Yjs document
 
-    // Map language to file extension
     const languageFileExtensions = {
       javascript: 'js',
       python: 'py',
@@ -240,16 +236,12 @@ function RoomPageContent() {
       text: 'txt'
     };
 
-    // Get the selected language from your editor's state
     const fileExtension = languageFileExtensions[selectedLanguage] || 'txt'; // Default to 'txt' if no match
 
-    // Create a Blob object with the content
     const blob = new Blob([content], { type: 'text/plain' });
-
-    // Create a link element and trigger the download
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension based on selectedLanguage
+    link.download = `syncrolly_content.${fileExtension}`; // Download with the dynamic file extension
     link.click();
   };
 
@@ -261,12 +253,10 @@ function RoomPageContent() {
         alert(response.error);
       } else {
         console.log(`Editability toggled to ${response.isEditable}`);
+        setIsEditable(response.isEditable); // Update local state based on response
       }
     });
   };
-
-  // Removed: Handle Editor Mode Toggle
-  // const handleToggleEditorMode = () => { ... }
 
   // Handle Sending Messages
   const handleSendMessage = () => {
@@ -287,7 +277,7 @@ function RoomPageContent() {
     formData.append('userId', storedUserId);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/upload/${roomId}`, {
+      const response = await fetch(`${backendUrl}/upload/${roomId}`, {
         method: 'POST',
         body: formData,
         mode: 'cors',
@@ -329,7 +319,7 @@ function RoomPageContent() {
   // Handle File Deletion
   const handleDeleteFile = async (fileId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/delete_file/${roomId}/${fileId}`, {
+      const response = await fetch(`${backendUrl}/delete_file/${roomId}/${fileId}`, {
         method: 'DELETE',
         mode: 'cors',
         credentials: 'include',
@@ -483,17 +473,6 @@ function RoomPageContent() {
               </button>
             </div>
 
-            {/* Removed Editor Mode Toggle Button */}
-            {/* 
-            {isCreator && (
-              <div className={styles['editor-toggle']}>
-                <button onClick={handleToggleEditorMode} className={styles['toggle-editor-btn']} aria-label="Toggle Editor Mode">
-                  {isCodeMode ? 'Switch to Text Editor' : 'Switch to Code Editor'}
-                </button>
-              </div>
-            )}
-            */}
-
             {/* Language Selector */}
             <div className={styles['language-select']}>
               <label htmlFor="language-select">Language:</label>
@@ -512,15 +491,6 @@ function RoomPageContent() {
                 <option value="text">Text</option>
               </select>
             </div>
-
-            {/* Removed Current Editor Mode Status */}
-            {/* 
-            <div className={styles['current-editor-mode']}>
-              <p>
-                Current Editor Mode: <strong>{isCodeMode ? 'Code Editor' : 'Plain Text Editor'}</strong>
-              </p>
-            </div>
-            */}
           </div>
 
           <div className={styles['main-content']}>
@@ -540,15 +510,6 @@ function RoomPageContent() {
               </div>
             )}
           </div>
-
-          {/* Removed Editor Reminder */}
-          {/* 
-          {showReminder && (
-            <div className={styles['editor-reminder']}>
-              <p><strong>Reminder:</strong> Please type one by one when using the text editor.</p>
-            </div>
-          )}
-          */}
 
           <div className={styles['typing-indicator']}>
             {typingUsers.length > 0 && (
