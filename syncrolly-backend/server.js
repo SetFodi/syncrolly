@@ -298,36 +298,35 @@ const io = new Server(server, {
       });
 
       // Handle toggle_editability
-// Handle toggle_editability
-socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
-  try {
-    const room = await roomsCollection.findOne({ roomId });
-    if (!room) {
-      return callback({ error: 'Room not found.' });
-    }
+      socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
+        try {
+          const room = await roomsCollection.findOne({ roomId });
+          if (!room) {
+            return callback({ error: 'Room not found.' });
+          }
 
-    if (room.creatorId !== userId) {
-      return callback({ error: 'Only the room creator can toggle editability.' });
-    }
+          if (room.creatorId !== userId) {
+            return callback({ error: 'Only the room creator can toggle the editability.' });
+          }
 
-    const newEditableState = !room.isEditable;
-    await roomsCollection.updateOne(
-      { roomId },
-      { $set: { isEditable: newEditableState } }
-    );
+          const newEditableState = !room.isEditable;
+          await roomsCollection.updateOne(
+            { roomId },
+            { $set: { isEditable: newEditableState } }
+          );
 
-    // Emit to all clients in the specific room only
-    io.to(roomId).emit('editable_state_changed', { isEditable: newEditableState });
+          io.emit('editable_state_changed', { roomId, isEditable: newEditableState });
 
-    callback({ success: true, isEditable: newEditableState });
-  } catch (error) {
-    console.error('Error in toggle_editability:', error);
-    if (callback) {
-      callback({ error: 'Internal Server Error' });
-    }
-  }
-});
-
+          if (callback) {
+            callback({ success: true, isEditable: newEditableState });
+          }
+        } catch (error) {
+          console.error('Error in toggle_editability:', error);
+          if (callback) {
+            callback({ error: 'Internal Server Error' });
+          }
+        }
+      });
 
       // Handle toggle_editor_mode
       socket.on('toggle_editor_mode', async ({ roomId, userId }, callback) => {
