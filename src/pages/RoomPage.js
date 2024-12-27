@@ -184,14 +184,22 @@ useEffect(() => {
   }
 }, [ydoc, isYjsSynced]);
 
-  // **Removed the useEffect that emits 'send_editor_content' on unmount**
-
-  const observer = () => {
-    const content = ytext.toString();
-    if (content !== null && content !== undefined) {
-      debouncedSave(content);
+ // Add this to your RoomPageContent component
+useEffect(() => {
+  return () => {
+    if (ydoc && isYjsSynced) {
+      const content = ydoc.getText('shared-text').toString();
+      if (content.trim()) {
+        socket.emit('save_content', { 
+          roomId,
+          text: content 
+        });
+      }
     }
   };
+}, [ydoc, isYjsSynced, roomId]);
+
+
   // Handle Awareness State
 useEffect(() => {
   if (!ydoc || !isYjsSynced || !isNameSet) return;
@@ -214,7 +222,13 @@ useEffect(() => {
       }
     });
   }, 2000);
-
+  
+  const observer = () => {
+    const content = ytext.toString();
+    if (content !== null && content !== undefined) {
+      debouncedSave(content);
+    }
+  };
 
   ytext.observe(observer);
 
