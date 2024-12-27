@@ -185,7 +185,7 @@ function RoomPageContent() {
     });
     console.log('Content saved to MongoDB:', content);
   }, 1000);
- [ydoc, isYjsSynced, isNameSet, roomId]);
+
 
 
   useEffect(() => {
