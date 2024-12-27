@@ -206,7 +206,7 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
 
 async function saveContentToMongo(roomId, content) {
   try {
-    await roomsCollection.updateOne(
+    const result = await roomsCollection.updateOne(
       { roomId },
       { 
         $set: { 
@@ -216,9 +216,11 @@ async function saveContentToMongo(roomId, content) {
       },
       { upsert: true }
     );
-    console.log(`Content saved to MongoDB for room ${roomId}`);
+    console.log(`Content saved to MongoDB for room ${roomId}. Modified: ${result.modifiedCount}, Upserted: ${result.upsertedCount}`);
+    return true;
   } catch (error) {
     console.error('Error saving content to MongoDB:', error);
+    return false;
   }
 }
 // ========================
@@ -233,18 +235,20 @@ io.on('connection', async (socket) => {
   // Emit the total connected users count to all clients
   const totalConnectedUsers = await activeUsersCollection.countDocuments();
   io.emit('status_update', { totalConnectedUsers });
-socket.on('content_update', async ({ roomId, content }) => {
+  socket.on('content_update', async ({ roomId, content }) => {
     try {
-      await saveContentToMongo(roomId, content);
-      
-      // Broadcast to other clients in the room
-      socket.to(roomId).emit('content_synced', { content });
+      const success = await saveContentToMongo(roomId, content);
+      if (success) {
+        // Broadcast to other clients in the room
+        socket.to(roomId).emit('content_synced', { content });
+        console.log(`Content updated for room ${roomId}`);
+      }
     } catch (error) {
       console.error('Error handling content update:', error);
     }
   });
   // Handle room joining
-socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
     try {
       let room = await roomsCollection.findOne({ roomId });
 
@@ -252,14 +256,13 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
         if (isCreator) {
           room = {
             roomId,
-            text: '',
+            text: '', // Initialize empty text
             messages: [],
             users: {},
             theme: 'light',
             lastActivity: new Date(),
             creatorId: userId,
-            isEditable: true,
-            editorMode: 'code',
+            isEditable: true
           };
           await roomsCollection.insertOne(room);
         } else {
@@ -271,11 +274,15 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       room.users[userId] = userName;
       await roomsCollection.updateOne(
         { roomId },
-        { $set: { users: room.users, lastActivity: new Date() } }
+        { 
+          $set: { 
+            users: room.users,
+            lastActivity: new Date()
+          }
+        }
       );
 
       socketUserMap.set(socket.id, { userId, roomId });
-      const files = await uploadsCollection.find({ roomId }).toArray();
       socket.join(roomId);
 
       // Send complete room state including text content
@@ -283,12 +290,11 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
         success: true,
         messages: room.messages,
         theme: room.theme,
-        files,
+        text: room.text || '', // Ensure text is included
+        files: await uploadsCollection.find({ roomId }).toArray(),
         users: room.users,
         isCreator: room.creatorId === userId,
-        isEditable: room.isEditable,
-        editorMode: room.editorMode,
-        text: room.text || ''
+        isEditable: room.isEditable
       });
     } catch (error) {
       console.error('Error in join_room:', error);

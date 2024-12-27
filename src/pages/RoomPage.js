@@ -13,10 +13,10 @@ import FilesModal from './FilesModal';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
 import { yCollab } from 'y-codemirror.next'; // Yjs extension for CodeMirror
-import { debounce } from 'lodash';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { php } from '@codemirror/lang-php';
+import { debounce } from 'lodash';
 
 function RoomPageContent() {
   const { roomId } = useParams();
@@ -73,7 +73,7 @@ function RoomPageContent() {
     if (isNameSet) {
       setLoading(true);
       console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-
+  
       socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
         console.log('join_room response:', response);
         if (response.error) {
@@ -87,8 +87,15 @@ function RoomPageContent() {
           setMessages(response.messages);
           setIsEditable(response.isEditable);
           setIsCreator(response.isCreator);
-          
-          // **Removed the manual Yjs document update to prevent duplication**
+  
+          // Set initial content from MongoDB if it exists
+          if (response.text && ydoc) {
+            const ytext = ydoc.getText('shared-text');
+            if (ytext.toString() === '') {  // Only set if empty to avoid conflicts
+              ytext.delete(0, ytext.length);
+              ytext.insert(0, response.text);
+            }
+          }
           
           setLoading(false);
         }
@@ -147,6 +154,8 @@ function RoomPageContent() {
         socket.off('editable_state_changed'); // Clean up the new listener
         socket.off('theme_changed');
         socket.off('room_deleted');
+        socket.off('room_joined');
+        socket.off('content_update')
       };
     }
   }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
@@ -165,7 +174,7 @@ function RoomPageContent() {
     return () => {
       socket.off('room_joined');
     };
-  }, [ydoc]);
+  }, [ydoc, roomId]);
 
     
   useEffect(() => {
@@ -178,6 +187,36 @@ function RoomPageContent() {
   // **Removed the useEffect that emits 'send_editor_content' on unmount**
 
   // Handle Awareness State
+  useEffect(() => {
+    if (!ydoc || !isYjsSynced || !isNameSet) return;
+  
+    const ytext = ydoc.getText('shared-text');
+    
+    // Create a debounced save function
+    const debouncedSave = debounce((content) => {
+      socket.emit('content_update', { 
+        roomId, 
+        content: content 
+      });
+      console.log('Content saved to MongoDB:', content);
+    }, 1000);
+  
+    // Observe text changes
+    const observer = () => {
+      const content = ytext.toString();
+      debouncedSave(content);
+    };
+  
+    // Subscribe to text changes
+    ytext.observe(observer);
+  
+    return () => {
+      ytext.unobserve(observer);
+      debouncedSave.cancel();
+    };
+  }, [ydoc, isYjsSynced, isNameSet, roomId]);
+
+
   useEffect(() => {
     if (isNameSet && awareness) {
       awareness.setLocalStateField('user', {
@@ -211,12 +250,10 @@ function RoomPageContent() {
       const timer = setTimeout(() => {
         setSyncTimeout(true);
         setLoading(false);
-      }, 10000); // 10 second timeout
-
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [loading]);
-
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
