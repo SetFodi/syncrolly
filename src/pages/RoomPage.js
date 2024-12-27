@@ -10,8 +10,9 @@ import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
 import styles from './RoomPage.module.css';
 import FilesModal from './FilesModal';
-import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
+import { yCollab } from 'y-codemirror.next'; // Yjs extension for CodeMirror
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { php } from '@codemirror/lang-php';
@@ -27,8 +28,6 @@ function RoomPageContent() {
   const storedUserId = localStorage.getItem('userId') || uuidv4();
   const storedUserName = localStorage.getItem('userName') || '';
   const storedTheme = localStorage.getItem('theme') || 'light';
- const { ydoc, awareness } = useYjs(); // Destructure ydoc and awareness from the context
-  const [isYjsSynced, setIsYjsSynced] = useState(false); //
 
   if (!localStorage.getItem('userId')) {
     localStorage.setItem('userId', storedUserId);
@@ -67,6 +66,7 @@ function RoomPageContent() {
   }), []);
 
   // Access Yjs context
+  const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
   useEffect(() => {
@@ -177,7 +177,20 @@ function RoomPageContent() {
   }, [ydoc, roomId]);
 
     
+useEffect(() => {
+  if (ydoc && isYjsSynced && !hasInitialSync.current) {
+    hasInitialSync.current = true;
+    console.log('Yjs initial sync completed');
+  }
+}, [ydoc, isYjsSynced]);
 
+  // **Removed the useEffect that emits 'send_editor_content' on unmount**
+
+  // Handle Awareness State
+ useEffect(() => {
+  if (!ydoc || !isYjsSynced || !isNameSet) return;
+
+  const ytext = ydoc.getText('shared-text');
   
   // Create a debounced save function
   const debouncedSave = debounce((content) => {
@@ -188,6 +201,18 @@ function RoomPageContent() {
     console.log('Content saved to MongoDB:', content);
   }, 1000);
 
+  const observer = () => {
+    const content = ytext.toString();
+    debouncedSave(content);
+  };
+
+  ytext.observe(observer);
+
+  return () => {
+    ytext.unobserve(observer);
+    debouncedSave.cancel();
+  };
+}, [ydoc, isYjsSynced, isNameSet, roomId]);
 
 
   useEffect(() => {
@@ -227,35 +252,6 @@ function RoomPageContent() {
       return () => clearTimeout(timer);
     }
   }, [loading]);
-
-
-// Handle CodeMirror content changes and send them to the server
-useEffect(() => {
-  const handleEditorChange = debounce((editorState) => {
-    const content = editorState.doc.toString(); // Get the content of CodeMirror
-    socket.emit('content_update', { roomId, text: content }); // Emit the content
-    console.log('Sending content to server:', content);
-  }, 1000);
-
-  // Attach this handler to the CodeMirror editor
-  const editor = document.querySelector('.CodeMirror');
-  if (editor) {
-    const cm = editor.CodeMirror;
-    cm.on('change', (editor) => {
-      handleEditorChange(editor);
-    });
-  }
-
-  // Cleanup on unmount
-  return () => {
-    if (editor) {
-      const cm = editor.CodeMirror;
-      cm.off('change', handleEditorChange);
-    }
-  };
-}, [roomId]); // Ensure this is reacting to the `roomId`
-
-
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -442,15 +438,15 @@ useEffect(() => {
   };
 
   // Editor Extensions
-const editorExtensions = useMemo(() => {
-  const baseExtension = languageExtensions[selectedLanguage];
-  return [
-    baseExtension || markdown(), // Fallback to markdown if extension is undefined
-    EditorView.lineWrapping,
-    EditorView.editable.of(isEditable || isCreator),
-  ];
-}, [isEditable, isCreator, selectedLanguage, languageExtensions]);
-
+  const editorExtensions = useMemo(() => {
+    const baseExtension = languageExtensions[selectedLanguage];
+    return [
+      baseExtension || markdown(), // Fallback to markdown if extension is undefined
+      EditorView.lineWrapping,
+      EditorView.editable.of(isEditable || isCreator),
+      yCollab(ydoc.getText('shared-text'), awareness, {}),
+    ];
+  }, [isEditable, isCreator, awareness, selectedLanguage, languageExtensions, ydoc]);
 
   return (
     <div className={`${styles['room-container']} ${styles[theme]}`}>
