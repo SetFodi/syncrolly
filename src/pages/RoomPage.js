@@ -192,14 +192,16 @@ function RoomPageContent() {
   
     const ytext = ydoc.getText('shared-text');
     
-    // Create a debounced save function
-    const debouncedSave = debounce((content) => {
-      socket.emit('content_update', { 
-        roomId, 
-        content: content 
-      });
-      console.log('Content saved to MongoDB:', content);
-    }, 1000);
+    
+// Create a debounced save function
+const debouncedSave = debounce((text) => {
+  socket.emit('content_update', { 
+    roomId, 
+    text: text,  // Change 'content' to 'text' here
+  });
+  console.log('Text saved to MongoDB:', text);
+}, 1000);
+
   
     // Observe text changes
     const observer = () => {
