@@ -11,7 +11,6 @@ import { EditorView } from '@codemirror/view';
 import styles from './RoomPage.module.css';
 import FilesModal from './FilesModal';
 import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
-import { yCollab } from 'y-codemirror.next'; // Yjs extension for CodeMirror
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
@@ -28,6 +27,8 @@ function RoomPageContent() {
   const storedUserId = localStorage.getItem('userId') || uuidv4();
   const storedUserName = localStorage.getItem('userName') || '';
   const storedTheme = localStorage.getItem('theme') || 'light';
+ const { ydoc, awareness } = useYjs(); // Destructure ydoc and awareness from the context
+  const [isYjsSynced, setIsYjsSynced] = useState(false); //
 
   if (!localStorage.getItem('userId')) {
     localStorage.setItem('userId', storedUserId);
