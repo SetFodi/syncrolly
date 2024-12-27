@@ -187,61 +187,64 @@ useEffect(() => {
   // **Removed the useEffect that emits 'send_editor_content' on unmount**
 
   // Handle Awareness State
- useEffect(() => {
+useEffect(() => {
   if (!ydoc || !isYjsSynced || !isNameSet) return;
 
   const ytext = ydoc.getText('shared-text');
   
-  // Create a debounced save function
   const debouncedSave = debounce((content) => {
+    if (!content.trim()) return; // Don't save empty content
+    
+    console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
+    
     socket.emit('save_content', { 
       roomId,
       text: content
+    }, (response) => {
+      if (response?.success) {
+        console.log('Content successfully saved to MongoDB');
+      } else {
+        console.error('Failed to save content:', response?.error);
+      }
     });
-    console.log('Content saved to MongoDB:', content);
-  }, 2000); // Increased debounce time to reduce server load
-
-  // Observe changes to the Yjs document
+  }, 2000);
+// Add this to your RoomPageContent component
+useEffect(() => {
+  return () => {
+    if (ydoc && isYjsSynced) {
+      const content = ydoc.getText('shared-text').toString();
+      if (content.trim()) {
+        socket.emit('save_content', { 
+          roomId,
+          text: content 
+        });
+      }
+    }
+  };
+}, [ydoc, isYjsSynced, roomId]);
+  
   const observer = () => {
     const content = ytext.toString();
-    debouncedSave(content);
+    if (content !== null && content !== undefined) {
+      debouncedSave(content);
+    }
   };
 
   ytext.observe(observer);
 
+  // Save on unmount to ensure final state is saved
   return () => {
     ytext.unobserve(observer);
+    const finalContent = ytext.toString();
+    if (finalContent.trim()) {
+      socket.emit('save_content', { 
+        roomId,
+        text: finalContent 
+      });
+    }
     debouncedSave.cancel();
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
-
-
-  useEffect(() => {
-    if (isNameSet && awareness) {
-      awareness.setLocalStateField('user', {
-        id: storedUserId,
-        name: userName,
-        color: '#' + Math.floor(Math.random()*16777215).toString(16),
-      });
-
-      const onAwarenessChange = () => {
-        const states = Array.from(awareness.getStates().values());
-        setTypingUsers(
-          states.map((state) => ({
-            userId: state.user.id,
-            userName: state.user.name,
-            color: state.user.color,
-          }))
-        );
-      };
-
-      awareness.on('change', onAwarenessChange);
-
-      return () => {
-        awareness.off('change', onAwarenessChange);
-      };
-    }
-  }, [isNameSet, userName, awareness, storedUserId]);
 
   // Handle synchronization timeout
   useEffect(() => {
