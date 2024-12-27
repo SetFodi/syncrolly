@@ -204,25 +204,25 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
   }
 });
 
-async function saveContentToMongo(roomId, content) {
+// The function `saveContentToMongo` should store `text` in MongoDB as below:
+async function saveContentToMongo(roomId, text) {
   try {
     const result = await roomsCollection.updateOne(
       { roomId },
       { 
         $set: { 
-          text: content,
-          lastActivity: new Date()
+          text: text,  // Save 'text' instead of 'content'
+          lastActivity: new Date() 
         }
       },
       { upsert: true }
     );
-    console.log(`Content saved to MongoDB for room ${roomId}. Modified: ${result.modifiedCount}, Upserted: ${result.upsertedCount}`);
-    return true;
+    console.log(`Text saved for room ${roomId} in MongoDB`);
   } catch (error) {
     console.error('Error saving content to MongoDB:', error);
-    return false;
   }
 }
+
 // ========================
 // ===== Socket.IO Events =====
 // ========================
@@ -239,7 +239,6 @@ socket.on('content_update', async ({ roomId, text }) => {  // Changed 'content' 
   try {
     const success = await saveContentToMongo(roomId, text);  // Save the 'text' to MongoDB
     if (success) {
-      // Broadcast to other clients in the room
       socket.to(roomId).emit('content_synced', { text });  // Send 'text' to other clients
       console.log(`Text updated for room ${roomId}`);
     }
@@ -247,7 +246,6 @@ socket.on('content_update', async ({ roomId, text }) => {  // Changed 'content' 
     console.error('Error handling content update:', error);
   }
 });
-
   // Handle room joining
   socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
     try {
