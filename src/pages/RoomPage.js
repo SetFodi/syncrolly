@@ -10,6 +10,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { EditorView } from '@codemirror/view';
 import styles from './RoomPage.module.css';
 import FilesModal from './FilesModal';
+import { useYjs, YjsProvider } from '../contexts/YjsContext'; // Import the Yjs context
+import { yCollab } from 'y-codemirror.next'; // Yjs extension for CodeMirror
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
@@ -64,7 +66,6 @@ function RoomPageContent() {
   }), []);
 
   // Access Yjs context
-  const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
   useEffect(() => {
