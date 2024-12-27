@@ -185,20 +185,7 @@ useEffect(() => {
 }, [ydoc, isYjsSynced]);
 
   // **Removed the useEffect that emits 'send_editor_content' on unmount**
-useEffect(() => {
-  return () => {
-    if (ydoc && isYjsSynced) {
-      const content = ydoc.getText('shared-text').toString();
-      if (content.trim()) {
-        socket.emit('save_content', { 
-          roomId,
-          text: content 
-        });
-      }
-    }
-  };
-}, [ydoc, isYjsSynced, roomId]);
-  
+
   const observer = () => {
     const content = ytext.toString();
     if (content !== null && content !== undefined) {
