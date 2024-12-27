@@ -194,13 +194,14 @@ useEffect(() => {
   
   // Create a debounced save function
   const debouncedSave = debounce((content) => {
-    socket.emit('content_update', { 
-      roomId, 
-      text: content  // Ensure 'text' is sent
+    socket.emit('save_content', { 
+      roomId,
+      text: content
     });
     console.log('Content saved to MongoDB:', content);
-  }, 1000);
+  }, 2000); // Increased debounce time to reduce server load
 
+  // Observe changes to the Yjs document
   const observer = () => {
     const content = ytext.toString();
     debouncedSave(content);
