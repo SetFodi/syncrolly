@@ -177,46 +177,42 @@ function RoomPageContent() {
   }, [ydoc, roomId]);
 
     
-  useEffect(() => {
-    if (ydoc && isYjsSynced && !hasInitialSync.current) {
-      hasInitialSync.current = true;
-      console.log('Yjs initial sync completed');
-    }
-  }, [ydoc, isYjsSynced]);
+useEffect(() => {
+  if (ydoc && isYjsSynced && !hasInitialSync.current) {
+    hasInitialSync.current = true;
+    console.log('Yjs initial sync completed');
+  }
+}, [ydoc, isYjsSynced]);
 
   // **Removed the useEffect that emits 'send_editor_content' on unmount**
 
   // Handle Awareness State
-  useEffect(() => {
-    if (!ydoc || !isYjsSynced || !isNameSet) return;
-  
-    const ytext = ydoc.getText('shared-text');
-    
-    
-// Create a debounced save function
-const debouncedSave = debounce((text) => {
-  socket.emit('content_update', { 
-    roomId, 
-    text: text,  // Change 'content' to 'text' here
-  });
-  console.log('Text saved to MongoDB:', text);
-}, 1000);
+ useEffect(() => {
+  if (!ydoc || !isYjsSynced || !isNameSet) return;
 
+  const ytext = ydoc.getText('shared-text');
   
-    // Observe text changes
-    const observer = () => {
-      const content = ytext.toString();
-      debouncedSave(content);
-    };
-  
-    // Subscribe to text changes
-    ytext.observe(observer);
-  
-    return () => {
-      ytext.unobserve(observer);
-      debouncedSave.cancel();
-    };
-  }, [ydoc, isYjsSynced, isNameSet, roomId]);
+  // Create a debounced save function
+  const debouncedSave = debounce((content) => {
+    socket.emit('content_update', { 
+      roomId, 
+      text: content  // Ensure 'text' is sent
+    });
+    console.log('Content saved to MongoDB:', content);
+  }, 1000);
+
+  const observer = () => {
+    const content = ytext.toString();
+    debouncedSave(content);
+  };
+
+  ytext.observe(observer);
+
+  return () => {
+    ytext.unobserve(observer);
+    debouncedSave.cancel();
+  };
+}, [ydoc, isYjsSynced, isNameSet, roomId]);
 
 
   useEffect(() => {
