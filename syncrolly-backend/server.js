@@ -235,18 +235,19 @@ io.on('connection', async (socket) => {
   // Emit the total connected users count to all clients
   const totalConnectedUsers = await activeUsersCollection.countDocuments();
   io.emit('status_update', { totalConnectedUsers });
-  socket.on('content_update', async ({ roomId, content }) => {
-    try {
-      const success = await saveContentToMongo(roomId, content);
-      if (success) {
-        // Broadcast to other clients in the room
-        socket.to(roomId).emit('content_synced', { content });
-        console.log(`Content updated for room ${roomId}`);
-      }
-    } catch (error) {
-      console.error('Error handling content update:', error);
+socket.on('content_update', async ({ roomId, text }) => {  // Changed 'content' to 'text'
+  try {
+    const success = await saveContentToMongo(roomId, text);  // Save the 'text' to MongoDB
+    if (success) {
+      // Broadcast to other clients in the room
+      socket.to(roomId).emit('content_synced', { text });  // Send 'text' to other clients
+      console.log(`Text updated for room ${roomId}`);
     }
-  });
+  } catch (error) {
+    console.error('Error handling content update:', error);
+  }
+});
+
   // Handle room joining
   socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
     try {
