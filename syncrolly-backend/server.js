@@ -246,60 +246,79 @@ socket.on('content_update', async ({ roomId, text }) => {  // Changed 'content' 
     console.error('Error handling content update:', error);
   }
 });
-  // Handle room joining
-  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-    try {
-      let room = await roomsCollection.findOne({ roomId });
 
-      if (!room) {
-        if (isCreator) {
-          room = {
-            roomId,
-            text: '', // Initialize empty text
-            messages: [],
-            users: {},
-            theme: 'light',
-            lastActivity: new Date(),
-            creatorId: userId,
-            isEditable: true
-          };
-          await roomsCollection.insertOne(room);
-        } else {
-          return callback({ error: 'Room does not exist.' });
+
+  socket.on('save_content', async ({ roomId, text }) => {
+  try {
+    await roomsCollection.updateOne(
+      { roomId },
+      { 
+        $set: { 
+          text: text,
+          lastActivity: new Date() 
+        }
+      },
+      { upsert: true }
+    );
+    console.log(`Content saved to MongoDB for room ${roomId}`);
+  } catch (error) {
+    console.error('Error saving content to MongoDB:', error);
+  }
+});
+  // Handle room joining
+socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+  try {
+    let room = await roomsCollection.findOne({ roomId });
+
+    if (!room) {
+      if (isCreator) {
+        room = {
+          roomId,
+          text: '', // Initialize with empty text
+          messages: [],
+          users: {},
+          theme: 'light',
+          lastActivity: new Date(),
+          creatorId: userId,
+          isEditable: true
+        };
+        await roomsCollection.insertOne(room);
+      } else {
+        return callback({ error: 'Room does not exist.' });
+      }
+    }
+
+    // Add user to room
+    room.users[userId] = userName;
+    await roomsCollection.updateOne(
+      { roomId },
+      { 
+        $set: { 
+          users: room.users,
+          lastActivity: new Date()
         }
       }
+    );
 
-      // Add user to room
-      room.users[userId] = userName;
-      await roomsCollection.updateOne(
-        { roomId },
-        { 
-          $set: { 
-            users: room.users,
-            lastActivity: new Date()
-          }
-        }
-      );
+    socket.join(roomId);
+    socketUserMap.set(socket.id, { userId, roomId });
 
-      socketUserMap.set(socket.id, { userId, roomId });
-      socket.join(roomId);
-
-      // Send complete room state including text content
-      callback({
-        success: true,
-        messages: room.messages,
-        theme: room.theme,
-        text: room.text || '', // Ensure text is included
-        files: await uploadsCollection.find({ roomId }).toArray(),
-        users: room.users,
-        isCreator: room.creatorId === userId,
-        isEditable: room.isEditable
-      });
-    } catch (error) {
-      console.error('Error in join_room:', error);
-      callback({ error: 'Internal Server Error' });
-    }
-  });
+    // Send the complete room state including the text content
+    callback({
+      success: true,
+      text: room.text || '', // Always send the text content
+      messages: room.messages,
+      theme: room.theme,
+      files: await uploadsCollection.find({ roomId }).toArray(),
+      users: room.users,
+      isCreator: room.creatorId === userId,
+      isEditable: room.isEditable
+    });
+  } catch (error) {
+    console.error('Error in join_room:', error);
+    callback({ error: 'Internal Server Error' });
+  }
+});
 
 
 
