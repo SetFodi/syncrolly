@@ -206,31 +206,39 @@ useEffect(() => {
 
   const ytext = ydoc.getText('shared-text');
   
-  // Immediate save on changes
+  const debouncedSave = debounce((content) => {
+    if (content.trim()) {
+      socket.emit('save_content', { 
+        roomId,
+        text: content 
+      });
+    }
+  }, 1000); // Save after 1 second of no changes
+
   const observer = () => {
     const content = ytext.toString();
     if (content !== null && content !== undefined) {
-      socket.emit('save_content', { 
-        roomId,
-        text: content
-      });
+      debouncedSave(content);
     }
   };
 
   ytext.observe(observer);
 
-  // Save on unmount
   return () => {
     ytext.unobserve(observer);
+    debouncedSave.cancel();
+    
+    // Final save on unmount
     const finalContent = ytext.toString();
     if (finalContent.trim()) {
       socket.emit('save_content', { 
         roomId,
-        text: finalContent 
+        text: finalContent
       });
     }
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
+
 
   // Handle synchronization timeout
   useEffect(() => {
