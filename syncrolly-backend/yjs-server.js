@@ -67,75 +67,69 @@ wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0];
 
-  let ydoc;
-  if (documents.has(roomName)) {
-    ydoc = documents.get(roomName);
-  } else {
-    ydoc = new Y.Doc();
+  try {
+    const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+    let ydoc = new Y.Doc();
     
-    try {
-      const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
-      if (mongoDoc?.text) {
-        const ytext = ydoc.getText('shared-text');
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, mongoDoc.text);
-        console.log(`Loaded document ${roomName} from MongoDB`);
-      }
-    } catch (err) {
-      console.error(`Error loading document ${roomName}:`, err);
+    if (mongoDoc?.text) {
+      const ytext = ydoc.getText('shared-text');
+      ytext.delete(0, ytext.length);
+      ytext.insert(0, mongoDoc.text);
+      console.log(`Loaded document ${roomName} from MongoDB`);
     }
     
     documents.set(roomName, ydoc);
+
+    // Set up automatic saving
+    const saveInterval = setInterval(async () => {
+      try {
+        const content = ydoc.getText('shared-text').toString();
+        if (content.trim()) {
+          await roomsCollection.updateOne(
+            { roomId: roomName },
+            { 
+              $set: { 
+                text: content,
+                lastActivity: new Date()
+              }
+            },
+            { upsert: true }
+          );
+          console.log(`Auto-saved document ${roomName}`);
+        }
+      } catch (error) {
+        console.error(`Error in auto-save for room ${roomName}:`, error);
+      }
+    }, 5000);
+
+    conn.on('close', async () => {
+      clearInterval(saveInterval);
+      if (documents.has(roomName)) {
+        const finalContent = ydoc.getText('shared-text').toString();
+        if (finalContent.trim()) {
+          await roomsCollection.updateOne(
+            { roomId: roomName },
+            { 
+              $set: { 
+                text: finalContent,
+                lastActivity: new Date()
+              }
+            },
+            { upsert: true }
+          );
+          console.log(`Final save for room ${roomName}`);
+        }
+      }
+    });
+
+    setupWSConnection(conn, req, {
+      docName: roomName,
+      gc: true,
+      gcFilter: () => false
+    });
+  } catch (error) {
+    console.error(`Error in WebSocket connection for room ${roomName}:`, error);
   }
-
-  // Setup persistence intervals
-  const persistenceInterval = setInterval(async () => {
-    try {
-      if (documents.has(roomName)) {
-        const content = ydoc.getText('shared-text').toString();
-        await roomsCollection.updateOne(
-          { roomId: roomName },
-          { 
-            $set: { 
-              text: content,
-              lastActivity: new Date()
-            }
-          },
-          { upsert: true }
-        );
-      } else {
-        clearInterval(persistenceInterval);
-      }
-    } catch (error) {
-      console.error(`Error in persistence interval for room ${roomName}:`, error);
-    }
-  }, 5000); // Save every 5 seconds
-
-  conn.on('close', async () => {
-    try {
-      if (documents.has(roomName)) {
-        const content = ydoc.getText('shared-text').toString();
-        await roomsCollection.updateOne(
-          { roomId: roomName },
-          { 
-            $set: { 
-              text: content,
-              lastActivity: new Date()
-            }
-          },
-          { upsert: true }
-        );
-      }
-    } catch (error) {
-      console.error(`Error in final save for room ${roomName}:`, error);
-    }
-  });
-
-  setupWSConnection(conn, req, {
-    docName: roomName,
-    gc: true,
-    gcFilter: () => false,
-  });
 });
 
 // Start the server
