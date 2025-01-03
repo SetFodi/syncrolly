@@ -1,28 +1,45 @@
-// YjsContext.jsx (local-only version)
+// frontend/src/contexts/YjsContext.jsx
+
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import * as Y from 'yjs';
-// import { WebsocketProvider } from 'y-websocket'; // <--- comment this out
+import { WebsocketProvider } from 'y-websocket';
 
 const YjsContext = createContext();
 
 export const YjsProvider = ({ children, roomId }) => {
   const ydoc = useMemo(() => new Y.Doc(), []);
-  
-  // We no longer need provider or awareness from a WebsocketProvider
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
-  const [isYjsSynced, setIsYjsSynced] = useState(true);
+  const [isYjsSynced, setIsYjsSynced] = useState(false);
 
   useEffect(() => {
-    // If you want to do something specific when roomId changes, do it here
-    // But *don't* create a WebsocketProvider
-    console.log("Yjs doc is local-only. No WebsocketProvider created.");
-    
-    // If you want local awareness:
-    // const myAwareness = new Y.awarenessProtocol.Awareness(ydoc); // for local usage only
-    // setAwareness(myAwareness);
-    // setIsYjsSynced(true);
+    if (roomId) {
+      const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
+      const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
+      setProvider(newProvider);
+      setAwareness(newProvider.awareness);
 
+      newProvider.on('status', (event) => {
+        console.log(`Yjs WebsocketProvider status: ${event.status}`);
+        setIsYjsSynced(event.status === 'connected');
+      });
+
+      newProvider.on('connection-error', (error) => {
+        console.error('Yjs WebsocketProvider connection error:', error);
+      });
+
+      newProvider.on('reconnect', () => {
+        console.log('Yjs WebsocketProvider attempting to reconnect...');
+      });
+
+      return () => {
+        newProvider.destroy();
+        setProvider(null);
+        setAwareness(null);
+        setIsYjsSynced(false);
+        console.log('Yjs WebsocketProvider disconnected');
+      };
+    }
   }, [roomId, ydoc]);
 
   return (
