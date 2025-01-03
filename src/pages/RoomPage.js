@@ -69,37 +69,37 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-useEffect(() => {
-  if (isNameSet) {
-    setLoading(true);
-    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-
-    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-      console.log('join_room response:', response);
-      if (response.error) {
-        alert(response.error);
-        setLoading(false);
-        return;
-      }
-      if (response.success) {
-        console.log('Joined room successfully:', response);
-        setFiles(response.files);
-        setMessages(response.messages);
-        setIsEditable(response.isEditable);
-        setIsCreator(response.isCreator);
-
-        // Set initial content from server response
-        if (response.text && ydoc) {
-          const ytext = ydoc.getText('shared-text');
-          if (ytext.toString() === '') {  // Only set if empty to avoid conflicts
-            ytext.delete(0, ytext.length);
-            ytext.insert(0, response.text);
-          }
+  useEffect(() => {
+    if (isNameSet) {
+      setLoading(true);
+      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+  
+      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+        console.log('join_room response:', response);
+        if (response.error) {
+          alert(response.error);
+          setLoading(false);
+          return;
         }
-        
-        setLoading(false);
-      }
-    });
+        if (response.success) {
+          console.log('Joined room successfully:', response);
+          setFiles(response.files);
+          setMessages(response.messages);
+          setIsEditable(response.isEditable);
+          setIsCreator(response.isCreator);
+  
+          // Set initial content from MongoDB if it exists
+          if (response.text && ydoc) {
+            const ytext = ydoc.getText('shared-text');
+            if (ytext.toString() === '') {  // Only set if empty to avoid conflicts
+              ytext.delete(0, ytext.length);
+              ytext.insert(0, response.text);
+            }
+          }
+          
+          setLoading(false);
+        }
+      });
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -202,33 +202,35 @@ useEffect(() => {
 
   // Handle Awareness State
 useEffect(() => {
-  if (ydoc && isYjsSynced) {
-    const debouncedSave = debounce((content) => {
-      if (!content.trim()) return; // Don't save empty content
-      
-      console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
-      
-      socket.emit('save_content', { 
-        roomId,
-        text: content
-      }, (response) => {
-        if (response?.success) {
-          console.log('Content successfully saved to MongoDB');
-        } else {
-          console.error('Failed to save content:', response?.error);
-        }
-      });
-    }, 2000);
+  if (!ydoc || !isYjsSynced || !isNameSet) return;
+
+  const ytext = ydoc.getText('shared-text');
   
-const observer = () => {
-      const content = ydoc.getText('shared-text').toString();
-      if (content !== null && content !== undefined) {
-        debouncedSave(content);
+  const debouncedSave = debounce((content) => {
+    if (!content.trim()) return; // Don't save empty content
+    
+    console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
+    
+    socket.emit('save_content', { 
+      roomId,
+      text: content
+    }, (response) => {
+      if (response?.success) {
+        console.log('Content successfully saved to MongoDB');
+      } else {
+        console.error('Failed to save content:', response?.error);
       }
-    };
+    });
+  }, 2000);
+  
+  const observer = () => {
+    const content = ytext.toString();
+    if (content !== null && content !== undefined) {
+      debouncedSave(content);
+    }
+  };
 
-    ydoc.getText('shared-text').observe(observer);
-
+  ytext.observe(observer);
 
   // Save on unmount to ensure final state is saved
   return () => {
