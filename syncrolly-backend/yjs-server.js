@@ -45,6 +45,8 @@ async function syncToMongo(roomName, ydoc) {
     if (!roomsCollection) return;
     
     const content = ydoc.getText('shared-text').toString();
+console.log(`syncToMongo: roomName=${roomName}, content="${content.slice(0, 50)}"`);
+
     await roomsCollection.updateOne(
       { roomId: roomName },
       { 
