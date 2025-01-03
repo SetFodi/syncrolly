@@ -206,33 +206,20 @@ useEffect(() => {
 
   const ytext = ydoc.getText('shared-text');
   
-  const debouncedSave = debounce((content) => {
-    if (!content.trim()) return; // Don't save empty content
-    
-    console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
-    
-    socket.emit('save_content', { 
-      roomId,
-      text: content
-    }, (response) => {
-      if (response?.success) {
-        console.log('Content successfully saved to MongoDB');
-      } else {
-        console.error('Failed to save content:', response?.error);
-      }
-    });
-  }, 2000);
-  
+  // Immediate save on changes
   const observer = () => {
     const content = ytext.toString();
     if (content !== null && content !== undefined) {
-      debouncedSave(content);
+      socket.emit('save_content', { 
+        roomId,
+        text: content
+      });
     }
   };
 
   ytext.observe(observer);
 
-  // Save on unmount to ensure final state is saved
+  // Save on unmount
   return () => {
     ytext.unobserve(observer);
     const finalContent = ytext.toString();
@@ -242,7 +229,6 @@ useEffect(() => {
         text: finalContent 
       });
     }
-    debouncedSave.cancel();
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
 
