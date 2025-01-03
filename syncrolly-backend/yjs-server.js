@@ -1,5 +1,3 @@
-// yjs-server.js
-
 const http = require('http');
 const WebSocket = require('ws');
 const { setupWSConnection } = require('y-websocket/bin/utils.js');
@@ -9,136 +7,147 @@ const url = require('url');
 const Y = require('yjs');
 const path = require('path');
 const fs = require('fs');
-const { MongoClient } = require('mongodb');
+const { MongoClient } = require('mongodb'); // Add MongoDB client
 
 dotenv.config();
 
-// MongoDB connection
+// MongoDB setup
 const MONGO_URI = process.env.MONGO_URI;
-const mongoClient = new MongoClient(MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
+const mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 let roomsCollection;
 
-// Port for the Yjs WebSocket server
+// Define the port for the Yjs WebSocket server
 const PORT = process.env.YJS_PORT || 1234;
 
-// LevelDB for offline Yjs persistence (optional)
+// Define the persistence directory
 const persistenceDir = path.join(__dirname, 'yjs-docs');
 if (!fs.existsSync(persistenceDir)) {
   fs.mkdirSync(persistenceDir);
 }
-const persistence = new LeveldbPersistence(persistenceDir);
 
-// Keep references to each Y.Doc in memory, keyed by roomId
+// Initialize LevelDB Persistence
+const persistence = new LeveldbPersistence(persistenceDir);
+const PERSISTENCE_INTERVAL = 5000;
 const documents = new Map();
 
-// Create a simple HTTP server
+// Create an HTTP server
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Yjs WebSocket Server');
 });
 
-// Create the WebSocket server
+// Initialize the WebSocket server instance
 const wss = new WebSocket.Server({ server });
 
-/**
- * Load existing text from MongoDB for a given roomId into a new Y.Doc
- */
-async function loadYDocFromDB(roomId) {
-  const ydoc = new Y.Doc();
-
-  const existing = await roomsCollection.findOne({ roomId });
-  if (existing?.text) {
-    const ytext = ydoc.getText('shared-text');
-    ytext.insert(0, existing.text);
-    console.log(`Loaded text for room ${roomId} from MongoDB`);
-  }
-
-  return ydoc;
-}
-
-/**
- * Save the current text from the Y.Doc back to MongoDB
- */
-async function saveYDocToDB(roomId, ydoc) {
+// Function to sync content to MongoDB
+async function syncToMongo(roomName, ydoc) {
   try {
+    if (!roomsCollection) return;
+    
     const content = ydoc.getText('shared-text').toString();
     await roomsCollection.updateOne(
-      { roomId },
-      {
-        $set: {
+      { roomId: roomName },
+      { 
+        $set: { 
           text: content,
           lastActivity: new Date()
         }
       },
       { upsert: true }
     );
-    console.log(`Saved room ${roomId} doc to MongoDB`);
-  } catch (err) {
-    console.error(`Error saving Y.Doc for room ${roomId} to DB:`, err);
+    console.log(`Synced document ${roomName} to MongoDB`);
+  } catch (error) {
+    console.error(`Error syncing to MongoDB for room ${roomName}:`, error);
   }
 }
 
-/**
- * Handle new WebSocket connections from clients
- */
+// Handle WebSocket connections
 wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
-  const roomId = parsedUrl.pathname.slice(1).split('?')[0] || 'default-room';
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0];
 
-  try {
-    // Reuse an in-memory doc if it exists; otherwise load from DB
-    let ydoc = documents.get(roomId);
-    if (!ydoc) {
-      ydoc = await loadYDocFromDB(roomId);
-      documents.set(roomId, ydoc);
-    }
-
-    // Listen for every local Y.Doc update (keystroke)
-    ydoc.on('update', (update) => {
-      console.log(`DOC UPDATED for room ${roomId} - update length: ${update.byteLength}`);
-      // Save to DB on every single update
-      saveYDocToDB(roomId, ydoc);
-    });
-
-    // If you want an interval fallback, you could add one:
-    // const saveInterval = setInterval(() => saveYDocToDB(roomId, ydoc), 5000);
-
-    // Setup standard Yjs WebSocket
-    setupWSConnection(conn, req, {
-      docName: roomId,
-      gc: true,
-      gcFilter: () => false
-    });
-
-    // On connection close, do a final save
-    conn.on('close', async () => {
-      // clearInterval(saveInterval); // if you set it
-      if (documents.has(roomId)) {
-        await saveYDocToDB(roomId, ydoc);
-        console.log(`Connection closed for room ${roomId}, final save done.`);
+  let ydoc;
+  if (documents.has(roomName)) {
+    ydoc = documents.get(roomName);
+  } else {
+    ydoc = new Y.Doc();
+    
+    try {
+      // First try to get from MongoDB
+      const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
+      if (mongoDoc?.text) {
+        ydoc.getText('shared-text').insert(0, mongoDoc.text);
+        console.log(`Loaded document ${roomName} from MongoDB`);
+      } else {
+        // If not in MongoDB, try LevelDB
+        const persistedDoc = await persistence.getYDoc(roomName);
+        if (persistedDoc) {
+          Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
+          console.log(`Loaded document ${roomName} from LevelDB`);
+          // Sync to MongoDB immediately
+          await syncToMongo(roomName, ydoc);
+        }
       }
-    });
-  } catch (error) {
-    console.error(`Error in WebSocket connection for room ${roomId}:`, error);
+    } catch (err) {
+      console.error(`Error loading document ${roomName}:`, err);
+    }
+    
+    documents.set(roomName, ydoc);
   }
+
+  // Set up persistence intervals
+  const persistenceInterval = setInterval(async () => {
+    try {
+      if (documents.has(roomName)) {
+        // Save to both LevelDB and MongoDB
+        await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
+        await syncToMongo(roomName, ydoc);
+      } else {
+        clearInterval(persistenceInterval);
+      }
+    } catch (error) {
+      console.error(`Error in persistence interval for room ${roomName}:`, error);
+    }
+  }, PERSISTENCE_INTERVAL);
+
+  // Handle disconnection
+  conn.on('close', async () => {
+    try {
+      // Final save before cleanup
+      if (documents.has(roomName)) {
+        await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
+        await syncToMongo(roomName, ydoc);
+        console.log(`Final save completed for room ${roomName}`);
+      }
+    } catch (error) {
+      console.error(`Error in final save for room ${roomName}:`, error);
+    }
+  });
+
+  // Setup Yjs connection
+  setupWSConnection(conn, req, {
+    docName: roomName,
+    gc: true,
+    gcFilter: () => false, // Disable garbage collection
+    persistence: persistence,
+  });
 });
 
-// Start the server + connect to MongoDB
+// Start the server
 async function startServer() {
   try {
+    // Connect to MongoDB first
     await mongoClient.connect();
     console.log('Connected to MongoDB');
     const db = mongoClient.db('syncrolly');
     roomsCollection = db.collection('rooms');
 
+    // Then start the server
     server.listen(PORT, () => {
       console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error('Failed to start Yjs server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
