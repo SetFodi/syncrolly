@@ -1,5 +1,6 @@
 const http = require('http');
 const WebSocket = require('ws');
+const { setupWSConnection } = require('y-websocket/bin/utils.js');
 const { LeveldbPersistence } = require('y-leveldb');
 const dotenv = require('dotenv');
 const url = require('url');
@@ -32,7 +33,7 @@ const documents = new Map();
 // Create an HTTP server
 const server = http.createServer((req, res) => {
   res.writeHead(200);
-  res.end('Yjs server is disabled or stubbed out.');
+  res.end('Yjs WebSocket Server');
 });
 
 // Initialize the WebSocket server instance
@@ -63,9 +64,72 @@ async function syncToMongo(roomName, ydoc) {
 // Handle WebSocket connections
 
 wss.on('connection', async (conn, req) => {
-  console.log("A client connected to Yjs WebSocket, but we're ignoring it.");
-  // Optionally close the connection or do nothing:
-  // conn.close();
+  const parsedUrl = url.parse(req.url, true);
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0];
+
+  try {
+    const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+    let ydoc = new Y.Doc();
+    
+    if (mongoDoc?.text) {
+      const ytext = ydoc.getText('shared-text');
+      ytext.delete(0, ytext.length);
+      ytext.insert(0, mongoDoc.text);
+      console.log(`Loaded document ${roomName} from MongoDB`);
+    }
+    
+    documents.set(roomName, ydoc);
+
+    // Set up automatic saving
+    const saveInterval = setInterval(async () => {
+      try {
+        const content = ydoc.getText('shared-text').toString();
+        if (content.trim()) {
+          await roomsCollection.updateOne(
+            { roomId: roomName },
+            { 
+              $set: { 
+                text: content,
+                lastActivity: new Date()
+              }
+            },
+            { upsert: true }
+          );
+          console.log(`Auto-saved document ${roomName}`);
+        }
+      } catch (error) {
+        console.error(`Error in auto-save for room ${roomName}:`, error);
+      }
+    }, 5000);
+
+    conn.on('close', async () => {
+      clearInterval(saveInterval);
+      if (documents.has(roomName)) {
+        const finalContent = ydoc.getText('shared-text').toString();
+        if (finalContent.trim()) {
+          await roomsCollection.updateOne(
+            { roomId: roomName },
+            { 
+              $set: { 
+                text: finalContent,
+                lastActivity: new Date()
+              }
+            },
+            { upsert: true }
+          );
+          console.log(`Final save for room ${roomName}`);
+        }
+      }
+    });
+
+    setupWSConnection(conn, req, {
+      docName: roomName,
+      gc: true,
+      gcFilter: () => false
+    });
+  } catch (error) {
+    console.error(`Error in WebSocket connection for room ${roomName}:`, error);
+  }
 });
 
 // Start the server
