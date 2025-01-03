@@ -65,7 +65,6 @@ async function loadYDocFromDB(roomId) {
 async function saveYDocToDB(roomId, ydoc) {
   try {
     const content = ydoc.getText('shared-text').toString();
-    // If you want to avoid empty saves, check trim() if you like
     await roomsCollection.updateOne(
       { roomId },
       {
@@ -97,21 +96,25 @@ wss.on('connection', async (conn, req) => {
       documents.set(roomId, ydoc);
     }
 
-    // Setup standard Yjs websocket connection
+    // Listen for every local update in this Y.Doc
+    // so we can save to MongoDB immediately.
+    ydoc.on('update', () => {
+      saveYDocToDB(roomId, ydoc);
+    });
+
+    // (Optional) Remove if you don't want an interval fallback:
+    // const saveInterval = setInterval(() => saveYDocToDB(roomId, ydoc), 5000);
+
+    // Setup standard Yjs WebSocket connection
     setupWSConnection(conn, req, {
       docName: roomId,
       gc: true,
       gcFilter: () => false
     });
 
-    // Auto-save every 5 seconds
-    const saveInterval = setInterval(async () => {
-      await saveYDocToDB(roomId, ydoc);
-    }, 5000);
-
     // Final save on close
     conn.on('close', async () => {
-      clearInterval(saveInterval);
+      // clearInterval(saveInterval); // if you had the interval
       if (documents.has(roomId)) {
         await saveYDocToDB(roomId, ydoc);
         console.log(`Connection closed for room ${roomId}, final save done.`);
