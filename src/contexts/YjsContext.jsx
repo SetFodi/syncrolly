@@ -1,5 +1,4 @@
 // frontend/src/contexts/YjsContext.jsx
-
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
@@ -7,12 +6,15 @@ import { WebsocketProvider } from 'y-websocket';
 const YjsContext = createContext();
 
 export const YjsProvider = ({ children, roomId }) => {
+  // Create a single Y.Doc per mount
   const ydoc = useMemo(() => new Y.Doc(), []);
+
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
   const [isYjsSynced, setIsYjsSynced] = useState(false);
 
   useEffect(() => {
+    // Connect to your Yjs WebSocket server
     if (roomId) {
       const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
       const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
