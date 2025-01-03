@@ -62,6 +62,7 @@ async function syncToMongo(roomName, ydoc) {
 }
 
 // Handle WebSocket connections
+
 wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0];
@@ -73,20 +74,12 @@ wss.on('connection', async (conn, req) => {
     ydoc = new Y.Doc();
     
     try {
-      // First try to get from MongoDB
       const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
       if (mongoDoc?.text) {
-        ydoc.getText('shared-text').insert(0, mongoDoc.text);
+        const ytext = ydoc.getText('shared-text');
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, mongoDoc.text);
         console.log(`Loaded document ${roomName} from MongoDB`);
-      } else {
-        // If not in MongoDB, try LevelDB
-        const persistedDoc = await persistence.getYDoc(roomName);
-        if (persistedDoc) {
-          Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
-          console.log(`Loaded document ${roomName} from LevelDB`);
-          // Sync to MongoDB immediately
-          await syncToMongo(roomName, ydoc);
-        }
       }
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
@@ -95,41 +88,53 @@ wss.on('connection', async (conn, req) => {
     documents.set(roomName, ydoc);
   }
 
-  // Set up persistence intervals
+  // Setup persistence intervals
   const persistenceInterval = setInterval(async () => {
     try {
       if (documents.has(roomName)) {
-        // Save to both LevelDB and MongoDB
-        await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
-        await syncToMongo(roomName, ydoc);
+        const content = ydoc.getText('shared-text').toString();
+        await roomsCollection.updateOne(
+          { roomId: roomName },
+          { 
+            $set: { 
+              text: content,
+              lastActivity: new Date()
+            }
+          },
+          { upsert: true }
+        );
       } else {
         clearInterval(persistenceInterval);
       }
     } catch (error) {
       console.error(`Error in persistence interval for room ${roomName}:`, error);
     }
-  }, PERSISTENCE_INTERVAL);
+  }, 5000); // Save every 5 seconds
 
-  // Handle disconnection
   conn.on('close', async () => {
     try {
-      // Final save before cleanup
       if (documents.has(roomName)) {
-        await persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc));
-        await syncToMongo(roomName, ydoc);
-        console.log(`Final save completed for room ${roomName}`);
+        const content = ydoc.getText('shared-text').toString();
+        await roomsCollection.updateOne(
+          { roomId: roomName },
+          { 
+            $set: { 
+              text: content,
+              lastActivity: new Date()
+            }
+          },
+          { upsert: true }
+        );
       }
     } catch (error) {
       console.error(`Error in final save for room ${roomName}:`, error);
     }
   });
 
-  // Setup Yjs connection
   setupWSConnection(conn, req, {
     docName: roomName,
     gc: true,
-    gcFilter: () => false, // Disable garbage collection
-    persistence: persistence,
+    gcFilter: () => false,
   });
 });
 
