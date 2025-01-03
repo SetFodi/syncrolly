@@ -315,8 +315,6 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
   }
 });
 
-
-
   // Handle toggle_editability
   socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
     try {
