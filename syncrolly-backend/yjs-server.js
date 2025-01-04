@@ -1,18 +1,25 @@
 /*************************************************************
- * yjs-server.js
+ * yjs-server.js  (ES module format, keep .js extension)
+ * -----------------------------------------------------------
+ * Remember to set "type": "module" in package.json!
  *************************************************************/
 
-const http = require('http');
-const WebSocket = require('ws');
-const { setupWSConnection } = require('y-websocket/bin/utils.js');
-const { LeveldbPersistence } = require('y-leveldb');
-const dotenv = require('dotenv');
-const url = require('url');
-const Y = require('yjs');
-const { Awareness } = require('y-protocols/awareness.js');
-const path = require('path');
-const fs = require('fs');
-const { MongoClient } = require('mongodb');
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import { setupWSConnection } from 'y-websocket/bin/utils.js';
+import { LeveldbPersistence } from 'y-leveldb';
+import dotenv from 'dotenv';
+import * as url from 'url';
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness.js';
+import path from 'path';
+import fs from 'fs';
+import { MongoClient } from 'mongodb';
+
+// For __dirname in ES modules:
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -58,7 +65,7 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
     try {
       const roomExists = await checkRoomExists(roomName);
       if (!roomExists) {
-        console.log(`Room ${roomName} does not exist in MongoDB; skipping sync`);
+        console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
         return false;
       }
 
@@ -81,10 +88,7 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
       console.log(`Successfully synced document "${roomName}" to MongoDB`);
       return true;
     } catch (err) {
-      console.error(
-        `Attempt ${i + 1} to sync "${roomName}" to MongoDB failed:`,
-        err
-      );
+      console.error(`Attempt ${i + 1} to sync "${roomName}" to MongoDB failed:`, err);
       if (i === retries - 1) throw err; // rethrow on final failure
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
@@ -123,13 +127,13 @@ async function cleanupDocument(roomName) {
 // ────────────────────────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   res.writeHead(200);
-  res.end('Yjs WebSocket Server is running.');
+  res.end('Yjs WebSocket Server is running (ESM).');
 });
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ server });
 
-wss.on('connection', async (conn, req) => {
-  const parsedUrl = url.parse(req.url, true);
-  const roomName = parsedUrl.pathname.slice(1).split('?')[0]; // e.g. "/my-room" -> "my-room"
+wss.on('connection', async (conn, request) => {
+  const parsedUrl = url.parse(request.url, true);
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'default-room';
 
   // Ensure room exists in Mongo
   const roomExists = await checkRoomExists(roomName);
@@ -242,11 +246,11 @@ wss.on('connection', async (conn, req) => {
   // 4D) Finally, wire up the actual Yjs <-> WebSocket bridging
   //     Pass our shared doc + shared awareness for real-time updates
   // ──────────────────────────────────────────────────────────────────────────
-  setupWSConnection(conn, req, {
+  setupWSConnection(conn, request, {
     docName: roomName,
     gc: false, // Often recommended for multi-user code editors
-    persistence, // so y-websocket can store state if needed
-    awareness,   // <--- crucial for consistent real-time updates & presence
+    persistence,
+    awareness, // crucial for consistent real-time updates & presence
   });
 });
 
@@ -281,7 +285,7 @@ async function startServer() {
     roomsCollection = db.collection('rooms');
 
     server.listen(PORT, () => {
-      console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
+      console.log(`Yjs WebSocket server running on ws://localhost:${PORT} (ESM mode)`);
     });
   } catch (err) {
     console.error('Failed to start Yjs server:', err);
