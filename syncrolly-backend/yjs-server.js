@@ -16,10 +16,9 @@ const mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifi
 let roomsCollection;
 
 const PORT = process.env.YJS_PORT || 1234;
-const PERSISTENCE_INTERVAL = 3000; // Reduced from 5000 to 3000 for more frequent saves
-const CLEANUP_TIMEOUT = 30 * 60 * 1000; // 30 minutes before cleanup
+const PERSISTENCE_INTERVAL = 3000;
+const CLEANUP_TIMEOUT = 30 * 60 * 1000;
 
-// Enhanced persistence setup
 const persistenceDir = path.join(__dirname, 'yjs-docs');
 if (!fs.existsSync(persistenceDir)) {
   fs.mkdirSync(persistenceDir);
@@ -27,16 +26,29 @@ if (!fs.existsSync(persistenceDir)) {
 
 const persistence = new LeveldbPersistence(persistenceDir);
 const documents = new Map();
-const lastAccess = new Map(); // Track last access time for each document
+const lastAccess = new Map();
 
-// Enhanced MongoDB sync function with retry mechanism
+// Check if room exists in MongoDB
+async function checkRoomExists(roomName) {
+  if (!roomsCollection) return false;
+  const room = await roomsCollection.findOne({ roomId: roomName });
+  return !!room;
+}
+
 async function syncToMongo(roomName, ydoc, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      if (!roomsCollection) return;
+      // First check if room exists
+      const roomExists = await checkRoomExists(roomName);
+      if (!roomExists) {
+        console.log(`Room ${roomName} does not exist in MongoDB, skipping sync`);
+        return false;
+      }
+
+      if (!roomsCollection) return false;
       
       const content = ydoc.getText('shared-text').toString();
-      if (!content.trim()) return; // Don't save empty content
+      if (!content.trim()) return false;
       
       await roomsCollection.updateOne(
         { roomId: roomName },
@@ -46,30 +58,32 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
             lastActivity: new Date(),
             lastSync: new Date()
           }
-        },
-        { upsert: true }
-      );
+        }
+      ); // Removed upsert option
       console.log(`Successfully synced document ${roomName} to MongoDB`);
       return true;
     } catch (error) {
       console.error(`Attempt ${i + 1} failed to sync to MongoDB for room ${roomName}:`, error);
       if (i === retries - 1) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
+  return false;
 }
 
-// Document cleanup function
 async function cleanupDocument(roomName) {
   try {
     const doc = documents.get(roomName);
     if (!doc) return;
 
-    // Final sync to both storages
-    await Promise.all([
-      persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(doc)),
-      syncToMongo(roomName, doc)
-    ]);
+    // Only sync if room still exists
+    const roomExists = await checkRoomExists(roomName);
+    if (roomExists) {
+      await Promise.all([
+        persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(doc)),
+        syncToMongo(roomName, doc)
+      ]);
+    }
 
     documents.delete(roomName);
     lastAccess.delete(roomName);
@@ -90,6 +104,14 @@ wss.on('connection', async (conn, req) => {
   const parsedUrl = url.parse(req.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0];
 
+  // Check if room exists before proceeding
+  const roomExists = await checkRoomExists(roomName);
+  if (!roomExists) {
+    console.log(`Room ${roomName} does not exist, closing connection`);
+    conn.close();
+    return;
+  }
+
   lastAccess.set(roomName, Date.now());
   
   let ydoc;
@@ -99,63 +121,54 @@ wss.on('connection', async (conn, req) => {
     ydoc = new Y.Doc();
     
     try {
-      // Only load initial content if the document is empty
       const ytext = ydoc.getText('shared-text');
-      if (ytext.toString() === '') {
-        // Attempt to load from MongoDB first
-        const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
-        if (mongoDoc?.text) {
-          ytext.insert(0, mongoDoc.text);
-          console.log(`Loaded document ${roomName} from MongoDB`);
-        } else {
-          // Fallback to LevelDB only if MongoDB has no content
-          const persistedDoc = await persistence.getYDoc(roomName);
-          if (persistedDoc) {
-            const persistedText = persistedDoc.getText('shared-text').toString();
-            if (persistedText) {
-              ytext.insert(0, persistedText);
-              console.log(`Loaded document ${roomName} from LevelDB`);
-              // Sync to MongoDB for consistency
-              await syncToMongo(roomName, ydoc);
-            }
-          }
-        }
-      } else {
-        console.log(`Document ${roomName} already has content, skipping load`);
+      const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
+      
+      if (mongoDoc?.text && !ytext.toString()) {
+        ytext.insert(0, mongoDoc.text);
+        console.log(`Loaded document ${roomName} from MongoDB`);
       }
+      
+      documents.set(roomName, ydoc);
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
+      conn.close();
+      return;
     }
-    
-    documents.set(roomName, ydoc);
   }
 
-  // Set up periodic persistence
   const persistenceInterval = setInterval(async () => {
     try {
-      if (documents.has(roomName)) {
-        const currentTime = Date.now();
-        const lastAccessTime = lastAccess.get(roomName);
-
-        if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
-          clearInterval(persistenceInterval);
-          await cleanupDocument(roomName);
-        } else {
-          // Regular persistence
-          await Promise.all([
-            persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
-            syncToMongo(roomName, ydoc)
-          ]);
-        }
-      } else {
+      if (!documents.has(roomName)) {
         clearInterval(persistenceInterval);
+        return;
+      }
+
+      const roomStillExists = await checkRoomExists(roomName);
+      if (!roomStillExists) {
+        clearInterval(persistenceInterval);
+        documents.delete(roomName);
+        lastAccess.delete(roomName);
+        return;
+      }
+
+      const currentTime = Date.now();
+      const lastAccessTime = lastAccess.get(roomName);
+
+      if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
+        clearInterval(persistenceInterval);
+        await cleanupDocument(roomName);
+      } else {
+        await Promise.all([
+          persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
+          syncToMongo(roomName, ydoc)
+        ]);
       }
     } catch (error) {
       console.error(`Error in persistence interval for room ${roomName}:`, error);
     }
   }, PERSISTENCE_INTERVAL);
 
-  // Update last access time on any document change
   ydoc.on('update', () => {
     lastAccess.set(roomName, Date.now());
   });
@@ -163,11 +176,13 @@ wss.on('connection', async (conn, req) => {
   conn.on('close', async () => {
     try {
       if (documents.has(roomName)) {
-        await Promise.all([
-          persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
-          syncToMongo(roomName, ydoc)
-        ]);
-        console.log(`Final save completed for room ${roomName}`);
+        const roomStillExists = await checkRoomExists(roomName);
+        if (roomStillExists) {
+          await Promise.all([
+            persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
+            syncToMongo(roomName, ydoc)
+          ]);
+        }
       }
     } catch (error) {
       console.error(`Error in final save for room ${roomName}:`, error);
@@ -182,12 +197,19 @@ wss.on('connection', async (conn, req) => {
   });
 });
 
-// Periodic cleanup check
+// Modified cleanup check
 setInterval(async () => {
   const currentTime = Date.now();
   for (const [roomName, lastAccessTime] of lastAccess.entries()) {
     if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
-      await cleanupDocument(roomName);
+      const roomExists = await checkRoomExists(roomName);
+      if (!roomExists) {
+        documents.delete(roomName);
+        lastAccess.delete(roomName);
+        console.log(`Removed document ${roomName} as room no longer exists`);
+      } else {
+        await cleanupDocument(roomName);
+      }
     }
   }
 }, CLEANUP_TIMEOUT);
@@ -208,14 +230,17 @@ async function startServer() {
   }
 }
 
-// Handle graceful shutdown
+// Graceful shutdown
 process.on('SIGINT', async () => {
   try {
     console.log('Gracefully shutting down...');
-    // Final save for all documents
-    await Promise.all(Array.from(documents.entries()).map(async ([roomName, doc]) => {
-      await cleanupDocument(roomName);
-    }));
+    const cleanupPromises = Array.from(documents.entries()).map(async ([roomName, doc]) => {
+      const roomExists = await checkRoomExists(roomName);
+      if (roomExists) {
+        await cleanupDocument(roomName);
+      }
+    });
+    await Promise.all(cleanupPromises);
     await mongoClient.close();
     process.exit(0);
   } catch (error) {
