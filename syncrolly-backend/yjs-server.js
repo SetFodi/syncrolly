@@ -99,22 +99,29 @@ wss.on('connection', async (conn, req) => {
     ydoc = new Y.Doc();
     
     try {
-      // Attempt to load from MongoDB first
-      const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
-      if (mongoDoc?.text) {
-        const ytext = ydoc.getText('shared-text');
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, mongoDoc.text);
-        console.log(`Loaded document ${roomName} from MongoDB`);
-      } else {
-        // Fallback to LevelDB
-        const persistedDoc = await persistence.getYDoc(roomName);
-        if (persistedDoc) {
-          Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedDoc));
-          console.log(`Loaded document ${roomName} from LevelDB`);
-          // Sync to MongoDB for consistency
-          await syncToMongo(roomName, ydoc);
+      // Only load initial content if the document is empty
+      const ytext = ydoc.getText('shared-text');
+      if (ytext.toString() === '') {
+        // Attempt to load from MongoDB first
+        const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
+        if (mongoDoc?.text) {
+          ytext.insert(0, mongoDoc.text);
+          console.log(`Loaded document ${roomName} from MongoDB`);
+        } else {
+          // Fallback to LevelDB only if MongoDB has no content
+          const persistedDoc = await persistence.getYDoc(roomName);
+          if (persistedDoc) {
+            const persistedText = persistedDoc.getText('shared-text').toString();
+            if (persistedText) {
+              ytext.insert(0, persistedText);
+              console.log(`Loaded document ${roomName} from LevelDB`);
+              // Sync to MongoDB for consistency
+              await syncToMongo(roomName, ydoc);
+            }
+          }
         }
+      } else {
+        console.log(`Document ${roomName} already has content, skipping load`);
       }
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
