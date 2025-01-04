@@ -87,15 +87,6 @@ socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserI
     setMessages(response.messages);
     setIsEditable(response.isEditable);
     setIsCreator(response.isCreator);
-    
-    // Set initial content ONLY if we're the creator and there's no content yet
-    if (response.text && ydoc && isCreator) {
-      const ytext = ydoc.getText('shared-text');
-      if (ytext.toString() === '') {
-        ytext.insert(0, response.text);
-      }
-    }
-    
     setLoading(false);
   }
 });
