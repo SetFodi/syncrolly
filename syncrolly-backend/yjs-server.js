@@ -17,14 +17,18 @@ let roomsCollection;
 
 const PORT = process.env.YJS_PORT || 1234;
 const PERSISTENCE_INTERVAL = 3000;
-const CLEANUP_TIMEOUT = 30 * 60 * 1000;
+const CLEANUP_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
+// Create persistence directory if it doesn't exist
 const persistenceDir = path.join(__dirname, 'yjs-docs');
 if (!fs.existsSync(persistenceDir)) {
   fs.mkdirSync(persistenceDir);
 }
 
+// Create LevelDB-based persistence
 const persistence = new LeveldbPersistence(persistenceDir);
+
+// In-memory maps to track docs and last-access times
 const documents = new Map();
 const lastAccess = new Map();
 
@@ -35,6 +39,9 @@ async function checkRoomExists(roomName) {
   return !!room;
 }
 
+/**
+ * Syncs the Yjs document's text to MongoDB (if the room still exists and text is non-empty).
+ */
 async function syncToMongo(roomName, ydoc, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -48,7 +55,9 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
       if (!roomsCollection) return false;
       
       const content = ydoc.getText('shared-text').toString();
-      if (!content.trim()) return false;
+      if (!content.trim()) {
+        return false; // Skip saving if text is empty/whitespace
+      }
       
       await roomsCollection.updateOne(
         { roomId: roomName },
@@ -56,12 +65,13 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
           $set: { 
             text: content,
             lastActivity: new Date(),
-            lastSync: new Date()
+            lastSync: new Date(),
           }
         }
-      ); // Removed upsert option
+      );
       console.log(`Successfully synced document ${roomName} to MongoDB`);
       return true;
+
     } catch (error) {
       console.error(`Attempt ${i + 1} failed to sync to MongoDB for room ${roomName}:`, error);
       if (i === retries - 1) throw error;
@@ -71,6 +81,10 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
   return false;
 }
 
+/**
+ * Persists a Yjs document to LevelDB (plus syncs to Mongo if the room still exists),
+ * then removes the doc from in-memory Maps.
+ */
 async function cleanupDocument(roomName) {
   try {
     const doc = documents.get(roomName);
@@ -116,20 +130,26 @@ wss.on('connection', async (conn, req) => {
   
   let ydoc;
   if (documents.has(roomName)) {
+    // Reuse in-memory doc if it hasn't been cleaned up yet
     ydoc = documents.get(roomName);
   } else {
+    // Create a fresh Y.Doc and bind it to LevelDB to load previous state
     ydoc = new Y.Doc();
-    
     try {
+      // 1) Load any existing Yjs state from LevelDB (or create a new doc if none)
+      await persistence.bindState(roomName, ydoc);
+
+      // 2) Optionally patch in Mongo text if the Yjs doc is still empty
       const ytext = ydoc.getText('shared-text');
       const mongoDoc = await roomsCollection?.findOne({ roomId: roomName });
-      
       if (mongoDoc?.text && !ytext.toString()) {
         ytext.insert(0, mongoDoc.text);
-        console.log(`Loaded document ${roomName} from MongoDB`);
+        console.log(`Loaded document ${roomName} from MongoDB (Yjs was empty)`);
       }
-      
+
+      // Store in memory
       documents.set(roomName, ydoc);
+
     } catch (err) {
       console.error(`Error loading document ${roomName}:`, err);
       conn.close();
@@ -137,6 +157,12 @@ wss.on('connection', async (conn, req) => {
     }
   }
 
+  /**
+   * This interval runs every PERSISTENCE_INTERVAL ms to:
+   * 1) Check if room still exists in Mongo (if not, remove from memory),
+   * 2) If it does exist, store updates in LevelDB + Mongo,
+   * 3) If last access exceeds CLEANUP_TIMEOUT, do final cleanup.
+   */
   const persistenceInterval = setInterval(async () => {
     try {
       if (!documents.has(roomName)) {
@@ -146,6 +172,7 @@ wss.on('connection', async (conn, req) => {
 
       const roomStillExists = await checkRoomExists(roomName);
       if (!roomStillExists) {
+        // If the room was deleted from Mongo, just remove from memory
         clearInterval(persistenceInterval);
         documents.delete(roomName);
         lastAccess.delete(roomName);
@@ -159,6 +186,7 @@ wss.on('connection', async (conn, req) => {
         clearInterval(persistenceInterval);
         await cleanupDocument(roomName);
       } else {
+        // Persist updates to LevelDB and optionally sync to Mongo
         await Promise.all([
           persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
           syncToMongo(roomName, ydoc)
@@ -169,10 +197,12 @@ wss.on('connection', async (conn, req) => {
     }
   }, PERSISTENCE_INTERVAL);
 
+  // Whenever the doc updates, refresh lastAccess
   ydoc.on('update', () => {
     lastAccess.set(roomName, Date.now());
   });
 
+  // On close, do a final storeUpdate + syncToMongo (if room still exists)
   conn.on('close', async () => {
     try {
       if (documents.has(roomName)) {
@@ -189,6 +219,7 @@ wss.on('connection', async (conn, req) => {
     }
   });
 
+  // Set up the Yjs WebSocket connection
   setupWSConnection(conn, req, {
     docName: roomName,
     gc: true,
@@ -197,23 +228,28 @@ wss.on('connection', async (conn, req) => {
   });
 });
 
-// Modified cleanup check
+// Periodically check for stale rooms to clean up (every CLEANUP_TIMEOUT ms)
 setInterval(async () => {
   const currentTime = Date.now();
   for (const [roomName, lastAccessTime] of lastAccess.entries()) {
     if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
       const roomExists = await checkRoomExists(roomName);
       if (!roomExists) {
+        // If Mongo says the room doesn't exist, remove from memory
         documents.delete(roomName);
         lastAccess.delete(roomName);
         console.log(`Removed document ${roomName} as room no longer exists`);
       } else {
+        // If it does exist, do final cleanup (persist + remove from memory)
         await cleanupDocument(roomName);
       }
     }
   }
 }, CLEANUP_TIMEOUT);
 
+/**
+ * Start the server + connect to MongoDB
+ */
 async function startServer() {
   try {
     await mongoClient.connect();
@@ -230,10 +266,11 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
+// Graceful shutdown on SIGINT
 process.on('SIGINT', async () => {
   try {
     console.log('Gracefully shutting down...');
+    // Persist & sync any remaining docs in memory, then close Mongo
     const cleanupPromises = Array.from(documents.entries()).map(async ([roomName, doc]) => {
       const roomExists = await checkRoomExists(roomName);
       if (roomExists) {
