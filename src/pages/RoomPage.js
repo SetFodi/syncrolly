@@ -88,14 +88,13 @@ socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserI
     setIsEditable(response.isEditable);
     setIsCreator(response.isCreator);
     
-    // Remove this part since Yjs handles content
-    /* if (response.text && ydoc) {
+    // Set initial content ONLY if we're the creator and there's no content yet
+    if (response.text && ydoc && isCreator) {
       const ytext = ydoc.getText('shared-text');
       if (ytext.toString() === '') {
-        ytext.delete(0, ytext.length);
         ytext.insert(0, response.text);
       }
-    } */
+    }
     
     setLoading(false);
   }
@@ -206,9 +205,7 @@ useEffect(() => {
   const ytext = ydoc.getText('shared-text');
   
   const debouncedSave = debounce((content) => {
-    if (!content.trim()) return; // Don't save empty content
-    
-    console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
+    if (!content.trim()) return;
     
     socket.emit('save_content', { 
       roomId,
@@ -231,16 +228,8 @@ useEffect(() => {
 
   ytext.observe(observer);
 
-  // Save on unmount to ensure final state is saved
   return () => {
     ytext.unobserve(observer);
-    const finalContent = ytext.toString();
-    if (finalContent.trim()) {
-      socket.emit('save_content', { 
-        roomId,
-        text: finalContent 
-      });
-    }
     debouncedSave.cancel();
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
