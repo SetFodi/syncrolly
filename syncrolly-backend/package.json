@@ -1,6 +1,7 @@
 {
   "name": "syncrolly-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "Backend for Syncrolly application",
   "main": "server.js",
   "scripts": {
