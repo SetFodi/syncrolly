@@ -5,7 +5,6 @@ import { WebsocketProvider } from 'y-websocket';
 const YjsContext = createContext();
 
 export const YjsProvider = ({ children, roomId }) => {
-  // Use useRef for ydoc to maintain the same instance across re-renders
   const ydocRef = useRef(null);
   const [provider, setProvider] = useState(null);
   const [awareness, setAwareness] = useState(null);
@@ -31,53 +30,80 @@ export const YjsProvider = ({ children, roomId }) => {
     const newProvider = new WebsocketProvider(wsUrl, roomId, ydocRef.current, {
       connect: true,
       awareness: {
-        timeout: 30000, // 30 seconds before inactive users are removed
+        timeout: 30000,
       },
-      params: {}, // Additional connection parameters if needed
+      params: {},
     });
-
-    providerRef.current = newProvider;
-    setProvider(newProvider);
-    setAwareness(newProvider.awareness);
 
     // Set up connection status handlers
     const handleStatus = (event) => {
       console.log(`Yjs WebsocketProvider status: ${event.status}`);
-      setIsYjsSynced(event.status === 'connected');
+      if (event.status === 'connected') {
+        setIsYjsSynced(true);
+      } else {
+        setIsYjsSynced(false);
+      }
     };
 
-    const handleSync = (isSynced) => {
-      console.log('Sync status:', isSynced);
+    // Handle provider sync
+    const handleSync = () => {
+      console.log('Provider synced');
       setIsYjsSynced(true);
     };
 
+    // Handle provider errors
     const handleError = (error) => {
       console.error('Yjs WebsocketProvider connection error:', error);
       setIsYjsSynced(false);
     };
 
+    // Handle reconnection attempts
+    const handleReconnect = () => {
+      console.log('Yjs WebsocketProvider attempting to reconnect...');
+      setIsYjsSynced(false);
+    };
+
+    // Set up all event listeners
     newProvider.on('status', handleStatus);
     newProvider.on('sync', handleSync);
     newProvider.on('connection-error', handleError);
-    newProvider.on('reconnect', () => {
-      console.log('Yjs WebsocketProvider attempting to reconnect...');
-    });
+    newProvider.on('reconnect', handleReconnect);
 
+    // Store provider references
+    providerRef.current = newProvider;
+    setProvider(newProvider);
+    setAwareness(newProvider.awareness);
+
+    // Cleanup function
     return () => {
+      // Remove all event listeners
       newProvider.off('status', handleStatus);
       newProvider.off('sync', handleSync);
       newProvider.off('connection-error', handleError);
+      newProvider.off('reconnect', handleReconnect);
+      
+      // Destroy the provider
       newProvider.destroy();
+      
+      // Reset states
       setProvider(null);
       setAwareness(null);
       setIsYjsSynced(false);
+      
       console.log('Yjs WebsocketProvider disconnected');
     };
   }, [roomId]);
 
-  // When component unmounts, destroy the Y.Doc instance
+  // Clean up on component unmount
   useEffect(() => {
     return () => {
+      // Clean up provider if it exists
+      if (providerRef.current) {
+        providerRef.current.destroy();
+        providerRef.current = null;
+      }
+      
+      // Clean up Y.Doc if it exists
       if (ydocRef.current) {
         ydocRef.current.destroy();
         ydocRef.current = null;
