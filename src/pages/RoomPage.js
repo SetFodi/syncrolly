@@ -74,33 +74,32 @@ function RoomPageContent() {
       setLoading(true);
       console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
   
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-  
-          // Set initial content from MongoDB if it exists
-          if (response.text && ydoc) {
-            const ytext = ydoc.getText('shared-text');
-            if (ytext.toString() === '') {  // Only set if empty to avoid conflicts
-              ytext.delete(0, ytext.length);
-              ytext.insert(0, response.text);
-            }
-          }
-          
-          setLoading(false);
-        }
-      });
-
+socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+  console.log('join_room response:', response);
+  if (response.error) {
+    alert(response.error);
+    setLoading(false);
+    return;
+  }
+  if (response.success) {
+    console.log('Joined room successfully:', response);
+    setFiles(response.files);
+    setMessages(response.messages);
+    setIsEditable(response.isEditable);
+    setIsCreator(response.isCreator);
+    
+    // Remove this part since Yjs handles content
+    /* if (response.text && ydoc) {
+      const ytext = ydoc.getText('shared-text');
+      if (ytext.toString() === '') {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, response.text);
+      }
+    } */
+    
+    setLoading(false);
+  }
+});
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
         console.log(`Editability changed to: ${newIsEditable}`);
