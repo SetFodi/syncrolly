@@ -44,8 +44,9 @@ async function syncToMongo(roomName, ydoc) {
   try {
     if (!roomsCollection) return;
     
-    const content = ydoc.getText('shared-text').toString();
-console.log(`syncToMongo: roomName=${roomName}, content="${content.slice(0, 50)}"`);
+const content = ydoc.getText('shared-text').toString();
+console.log(`syncToMongo: roomName=${roomName}, content="${content}"`);
+
 
     await roomsCollection.updateOne(
       { roomId: roomName },
@@ -127,13 +128,17 @@ wss.on('connection', async (conn, req) => {
   });
 
   // Setup Yjs connection
-  setupWSConnection(conn, req, {
-    docName: roomName,
-    gc: true,
-    gcFilter: () => false, // Disable garbage collection
-    persistence: persistence,
-  });
+setupWSConnection(conn, req, {
+  docName: roomName,
+  gc: true,
+  gcFilter: () => false,
+  persistence,
+  onSynced: (state) => {
+    console.log(`Document synced for room ${roomName}:`, state);
+    console.log(`Current content:`, ydoc.getText('shared-text').toString());
+  }
 });
+
 
 // Start the server
 async function startServer() {
