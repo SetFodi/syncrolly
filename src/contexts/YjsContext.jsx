@@ -1,13 +1,12 @@
 const http = require('http');
 const WebSocket = require('ws');
-const { setupWSConnection } = require('y-websocket/bin/utils.js');
-const { LeveldbPersistence } = require('y-leveldb');
-const dotenv = require('dotenv');
-const url = require('url');
 const Y = require('yjs');
 const path = require('path');
 const fs = require('fs');
 const { MongoClient } = require('mongodb');
+const dotenv = require('dotenv');
+const { LeveldbPersistence } = require('y-leveldb');
+const url = require('url');
 
 dotenv.config();
 
@@ -27,8 +26,66 @@ if (!fs.existsSync(persistenceDir)) {
 const persistence = new LeveldbPersistence(persistenceDir);
 const documents = new Map();
 const lastAccess = new Map();
+const wsconns = new Map();
 
-// Modified to be less strict - just check if we can connect to MongoDB
+// Setup WebSocket connection
+const setupWSConnection = (conn, req, { docName }) => {
+  conn.binaryType = 'arraybuffer';
+  const roomName = docName;
+
+  let doc = documents.get(roomName);
+  if (!doc) {
+    doc = new Y.Doc();
+    documents.set(roomName, doc);
+  }
+
+  const awareness = new Map();
+
+  // Initialize connection
+  {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // Handle messages from the client
+    conn.on('message', async (message) => {
+      try {
+        const update = new Uint8Array(message);
+        Y.applyUpdate(doc, update);
+        
+        // Broadcast to other clients
+        wsconns.get(roomName)?.forEach(conn => {
+          if (conn.readyState === WebSocket.OPEN) {
+            conn.send(message);
+          }
+        });
+
+        // Update last access time
+        lastAccess.set(roomName, Date.now());
+      } catch (err) {
+        console.error('Error handling message:', err);
+      }
+    });
+
+    // Handle connection close
+    conn.on('close', () => {
+      const conns = wsconns.get(roomName) || new Set();
+      conns.delete(conn);
+      if (conns.size === 0) {
+        wsconns.delete(roomName);
+      }
+    });
+
+    // Store connection
+    const conns = wsconns.get(roomName) || new Set();
+    conns.add(conn);
+    wsconns.set(roomName, conns);
+
+    // Send initial state
+    const state = Y.encodeStateAsUpdate(doc);
+    conn.send(state);
+  }
+};
+
 async function canAccessMongo() {
   return !!roomsCollection;
 }
@@ -36,19 +93,14 @@ async function canAccessMongo() {
 async function syncToMongo(roomName, ydoc, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      if (!await canAccessMongo()) {
-        console.log('MongoDB not accessible, skipping sync');
-        return false;
-      }
+      if (!await canAccessMongo()) return false;
 
       const content = ydoc.getText('shared-text').toString();
       if (!content.trim()) return false;
 
-      // Try to find the room first
       const room = await roomsCollection.findOne({ roomId: roomName });
       
       if (room) {
-        // Update existing room
         await roomsCollection.updateOne(
           { roomId: roomName },
           { 
@@ -60,8 +112,6 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
           }
         );
         console.log(`Successfully synced document ${roomName} to MongoDB`);
-      } else {
-        console.log(`Room ${roomName} doesn't exist in MongoDB yet, waiting for Socket.IO to create it`);
       }
       return true;
     } catch (error) {
@@ -128,10 +178,12 @@ wss.on('connection', async (conn, req) => {
       documents.set(roomName, ydoc);
     } catch (err) {
       console.error(`Error initializing document ${roomName}:`, err);
-      // Continue anyway - the room might be created later by Socket.IO
     }
   }
 
+  setupWSConnection(conn, req, { docName: roomName });
+
+  // Set up persistence interval
   const persistenceInterval = setInterval(async () => {
     try {
       if (!documents.has(roomName)) {
@@ -155,31 +207,6 @@ wss.on('connection', async (conn, req) => {
       console.error(`Error in persistence interval for room ${roomName}:`, error);
     }
   }, PERSISTENCE_INTERVAL);
-
-  ydoc.on('update', () => {
-    lastAccess.set(roomName, Date.now());
-  });
-
-  conn.on('close', async () => {
-    try {
-      if (documents.has(roomName)) {
-        await Promise.all([
-          persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
-          syncToMongo(roomName, ydoc)
-        ]);
-        console.log(`Final save completed for room ${roomName}`);
-      }
-    } catch (error) {
-      console.error(`Error in final save for room ${roomName}:`, error);
-    }
-  });
-
-  setupWSConnection(conn, req, {
-    docName: roomName,
-    gc: true,
-    gcFilter: () => false,
-    persistence: persistence,
-  });
 });
 
 // Periodic cleanup
