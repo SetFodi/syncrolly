@@ -1,133 +1,226 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+const http = require('http');
+const WebSocket = require('ws');
+const { setupWSConnection } = require('y-websocket/bin/utils.js');
+const { LeveldbPersistence } = require('y-leveldb');
+const dotenv = require('dotenv');
+const url = require('url');
+const Y = require('yjs');
+const path = require('path');
+const fs = require('fs');
+const { MongoClient } = require('mongodb');
 
-const YjsContext = createContext();
+dotenv.config();
 
-export const YjsProvider = ({ children, roomId }) => {
-  const ydocRef = useRef(null);
-  const [provider, setProvider] = useState(null);
-  const [awareness, setAwareness] = useState(null);
-  const [isYjsSynced, setIsYjsSynced] = useState(false);
-  const providerRef = useRef(null);
+const MONGO_URI = process.env.MONGO_URI;
+const mongoClient = new MongoClient(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+let roomsCollection;
 
-  useEffect(() => {
-    if (!roomId) return;
+const PORT = process.env.YJS_PORT || 1234;
+const PERSISTENCE_INTERVAL = 3000;
+const CLEANUP_TIMEOUT = 30 * 60 * 1000;
 
-    // Only create a new Y.Doc if one doesn't exist
-    if (!ydocRef.current) {
-      ydocRef.current = new Y.Doc();
-      console.log('Created new Y.Doc instance');
-    }
+const persistenceDir = path.join(__dirname, 'yjs-docs');
+if (!fs.existsSync(persistenceDir)) {
+  fs.mkdirSync(persistenceDir);
+}
 
-    // Clean up previous provider if it exists
-    if (providerRef.current) {
-      providerRef.current.destroy();
-      console.log('Cleaned up previous provider');
-    }
+const persistence = new LeveldbPersistence(persistenceDir);
+const documents = new Map();
+const lastAccess = new Map();
 
-    const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
-    const newProvider = new WebsocketProvider(wsUrl, roomId, ydocRef.current, {
-      connect: true,
-      awareness: {
-        timeout: 30000,
-      },
-      params: {},
-    });
+// Modified to be less strict - just check if we can connect to MongoDB
+async function canAccessMongo() {
+  return !!roomsCollection;
+}
 
-    // Set up connection status handlers
-    const handleStatus = (event) => {
-      console.log(`Yjs WebsocketProvider status: ${event.status}`);
-      if (event.status === 'connected') {
-        setIsYjsSynced(true);
+async function syncToMongo(roomName, ydoc, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      if (!await canAccessMongo()) {
+        console.log('MongoDB not accessible, skipping sync');
+        return false;
+      }
+
+      const content = ydoc.getText('shared-text').toString();
+      if (!content.trim()) return false;
+
+      // Try to find the room first
+      const room = await roomsCollection.findOne({ roomId: roomName });
+      
+      if (room) {
+        // Update existing room
+        await roomsCollection.updateOne(
+          { roomId: roomName },
+          { 
+            $set: { 
+              text: content,
+              lastActivity: new Date(),
+              lastSync: new Date()
+            }
+          }
+        );
+        console.log(`Successfully synced document ${roomName} to MongoDB`);
       } else {
-        setIsYjsSynced(false);
+        console.log(`Room ${roomName} doesn't exist in MongoDB yet, waiting for Socket.IO to create it`);
       }
-    };
-
-    // Handle provider sync
-    const handleSync = () => {
-      console.log('Provider synced');
-      setIsYjsSynced(true);
-    };
-
-    // Handle provider errors
-    const handleError = (error) => {
-      console.error('Yjs WebsocketProvider connection error:', error);
-      setIsYjsSynced(false);
-    };
-
-    // Handle reconnection attempts
-    const handleReconnect = () => {
-      console.log('Yjs WebsocketProvider attempting to reconnect...');
-      setIsYjsSynced(false);
-    };
-
-    // Set up all event listeners
-    newProvider.on('status', handleStatus);
-    newProvider.on('sync', handleSync);
-    newProvider.on('connection-error', handleError);
-    newProvider.on('reconnect', handleReconnect);
-
-    // Store provider references
-    providerRef.current = newProvider;
-    setProvider(newProvider);
-    setAwareness(newProvider.awareness);
-
-    // Cleanup function
-    return () => {
-      // Remove all event listeners
-      newProvider.off('status', handleStatus);
-      newProvider.off('sync', handleSync);
-      newProvider.off('connection-error', handleError);
-      newProvider.off('reconnect', handleReconnect);
-      
-      // Destroy the provider
-      newProvider.destroy();
-      
-      // Reset states
-      setProvider(null);
-      setAwareness(null);
-      setIsYjsSynced(false);
-      
-      console.log('Yjs WebsocketProvider disconnected');
-    };
-  }, [roomId]);
-
-  // Clean up on component unmount
-  useEffect(() => {
-    return () => {
-      // Clean up provider if it exists
-      if (providerRef.current) {
-        providerRef.current.destroy();
-        providerRef.current = null;
-      }
-      
-      // Clean up Y.Doc if it exists
-      if (ydocRef.current) {
-        ydocRef.current.destroy();
-        ydocRef.current = null;
-        console.log('Destroyed Y.Doc instance');
-      }
-    };
-  }, []);
-
-  return (
-    <YjsContext.Provider value={{ 
-      ydoc: ydocRef.current, 
-      provider, 
-      awareness, 
-      isYjsSynced 
-    }}>
-      {children}
-    </YjsContext.Provider>
-  );
-};
-
-export const useYjs = () => {
-  const context = useContext(YjsContext);
-  if (!context) {
-    throw new Error('useYjs must be used within a YjsProvider');
+      return true;
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed to sync to MongoDB for room ${roomName}:`, error);
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
-  return context;
-};
+  return false;
+}
+
+async function cleanupDocument(roomName) {
+  try {
+    const doc = documents.get(roomName);
+    if (!doc) return;
+
+    if (await canAccessMongo()) {
+      await Promise.all([
+        persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(doc)),
+        syncToMongo(roomName, doc)
+      ]);
+    }
+
+    documents.delete(roomName);
+    lastAccess.delete(roomName);
+    console.log(`Cleaned up document ${roomName}`);
+  } catch (error) {
+    console.error(`Error cleaning up document ${roomName}:`, error);
+  }
+}
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Yjs WebSocket Server');
+});
+
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', async (conn, req) => {
+  const parsedUrl = url.parse(req.url, true);
+  const roomName = parsedUrl.pathname.slice(1).split('?')[0];
+
+  lastAccess.set(roomName, Date.now());
+  
+  let ydoc;
+  if (documents.has(roomName)) {
+    ydoc = documents.get(roomName);
+    console.log(`Using existing Y.Doc for room ${roomName}`);
+  } else {
+    ydoc = new Y.Doc();
+    console.log(`Created new Y.Doc for room ${roomName}`);
+    
+    try {
+      if (await canAccessMongo()) {
+        const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+        if (mongoDoc?.text) {
+          const ytext = ydoc.getText('shared-text');
+          if (!ytext.toString()) {
+            ytext.insert(0, mongoDoc.text);
+            console.log(`Loaded document ${roomName} from MongoDB`);
+          }
+        }
+      }
+      documents.set(roomName, ydoc);
+    } catch (err) {
+      console.error(`Error initializing document ${roomName}:`, err);
+      // Continue anyway - the room might be created later by Socket.IO
+    }
+  }
+
+  const persistenceInterval = setInterval(async () => {
+    try {
+      if (!documents.has(roomName)) {
+        clearInterval(persistenceInterval);
+        return;
+      }
+
+      const currentTime = Date.now();
+      const lastAccessTime = lastAccess.get(roomName);
+
+      if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
+        clearInterval(persistenceInterval);
+        await cleanupDocument(roomName);
+      } else {
+        await Promise.all([
+          persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
+          syncToMongo(roomName, ydoc)
+        ]);
+      }
+    } catch (error) {
+      console.error(`Error in persistence interval for room ${roomName}:`, error);
+    }
+  }, PERSISTENCE_INTERVAL);
+
+  ydoc.on('update', () => {
+    lastAccess.set(roomName, Date.now());
+  });
+
+  conn.on('close', async () => {
+    try {
+      if (documents.has(roomName)) {
+        await Promise.all([
+          persistence.storeUpdate(roomName, Y.encodeStateAsUpdate(ydoc)),
+          syncToMongo(roomName, ydoc)
+        ]);
+        console.log(`Final save completed for room ${roomName}`);
+      }
+    } catch (error) {
+      console.error(`Error in final save for room ${roomName}:`, error);
+    }
+  });
+
+  setupWSConnection(conn, req, {
+    docName: roomName,
+    gc: true,
+    gcFilter: () => false,
+    persistence: persistence,
+  });
+});
+
+// Periodic cleanup
+setInterval(async () => {
+  const currentTime = Date.now();
+  for (const [roomName, lastAccessTime] of lastAccess.entries()) {
+    if (currentTime - lastAccessTime > CLEANUP_TIMEOUT) {
+      await cleanupDocument(roomName);
+    }
+  }
+}, CLEANUP_TIMEOUT);
+
+async function startServer() {
+  try {
+    await mongoClient.connect();
+    console.log('Connected to MongoDB');
+    const db = mongoClient.db('syncrolly');
+    roomsCollection = db.collection('rooms');
+
+    server.listen(PORT, () => {
+      console.log(`Yjs WebSocket server running on ws://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+process.on('SIGINT', async () => {
+  try {
+    console.log('Gracefully shutting down...');
+    const cleanupPromises = Array.from(documents.entries()).map(async ([roomName, doc]) => {
+      await cleanupDocument(roomName);
+    });
+    await Promise.all(cleanupPromises);
+    await mongoClient.close();
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+});
+
+startServer();
