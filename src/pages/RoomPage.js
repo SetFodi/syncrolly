@@ -199,6 +199,14 @@ useEffect(() => {
   };
 }, [ydoc, isYjsSynced, roomId]);
 
+useEffect(() => {
+  const ytext = ydoc.getText('shared-text')
+  const observer = () => {
+    console.log('Local YJS doc changed:', ytext.toString())
+  }
+  ytext.observe(observer)
+  return () => ytext.unobserve(observer)
+}, [ydoc])
 
   // Handle Awareness State
 useEffect(() => {
