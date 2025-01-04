@@ -8,7 +8,6 @@ const YjsContext = createContext();
 const documentsMap = new Map();
 
 export const YjsProvider = ({ children, roomId }) => {
-  // Only create a new Y.Doc if one doesn't exist for this room
   const ydoc = useMemo(() => {
     if (documentsMap.has(roomId)) {
       console.log(`Reusing existing Y.Doc for room ${roomId}`);
@@ -24,64 +23,83 @@ export const YjsProvider = ({ children, roomId }) => {
   const [awareness, setAwareness] = useState(null);
   const [isYjsSynced, setIsYjsSynced] = useState(false);
   const providerRef = useRef(null);
+  const initialSyncCompleted = useRef(false);
 
   useEffect(() => {
     if (!roomId) return;
 
-    // Cleanup previous provider if it exists
     if (providerRef.current) {
       providerRef.current.destroy();
       console.log('Cleaned up previous provider');
     }
 
     const wsUrl = process.env.REACT_APP_YJS_WS_URL || 'ws://localhost:1234';
-    const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
+    const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc, {
+      connect: true,
+      awareness: {
+        timeout: 30000,
+      },
+      params: {}
+    });
     providerRef.current = newProvider;
 
-    newProvider.on('status', (event) => {
-      console.log(`Yjs WebsocketProvider status: ${event.status}`);
-      setIsYjsSynced(event.status === 'connected');
-    });
-
-    newProvider.on('connection-error', (error) => {
-      console.error('Yjs WebsocketProvider connection error:', error);
-      setIsYjsSynced(false);
-    });
-
-    newProvider.on('sync', (isSynced) => {
+    const handleSync = (isSynced) => {
       console.log('Sync status:', isSynced);
-      if (isSynced) {
+      if (isSynced && !initialSyncCompleted.current) {
+        initialSyncCompleted.current = true;
         setIsYjsSynced(true);
       }
-    });
+    };
+
+    const handleStatus = (event) => {
+      console.log(`Yjs WebsocketProvider status: ${event.status}`);
+      setIsYjsSynced(event.status === 'connected');
+    };
+
+    const handleError = (error) => {
+      console.error('Yjs WebsocketProvider connection error:', error);
+      setIsYjsSynced(false);
+    };
+
+    newProvider.on('sync', handleSync);
+    newProvider.on('status', handleStatus);
+    newProvider.on('connection-error', handleError);
 
     setProvider(newProvider);
     setAwareness(newProvider.awareness);
 
     return () => {
-      newProvider.destroy();
-      setProvider(null);
-      setAwareness(null);
-      setIsYjsSynced(false);
-      console.log('Yjs WebsocketProvider disconnected');
+      if (newProvider) {
+        newProvider.off('sync', handleSync);
+        newProvider.off('status', handleStatus);
+        newProvider.off('connection-error', handleError);
+        newProvider.destroy();
+        setProvider(null);
+        setAwareness(null);
+        setIsYjsSynced(false);
+      }
     };
   }, [roomId, ydoc]);
 
-  // Cleanup document when component unmounts and no other providers are using it
   useEffect(() => {
-    return () => {
-      if (roomId && documentsMap.has(roomId)) {
-        const doc = documentsMap.get(roomId);
-        // Only destroy if this is the last provider using the document
-        const remainingProviders = Array.from(doc.getSubdocs()).length;
-        if (remainingProviders === 0) {
-          doc.destroy();
-          documentsMap.delete(roomId);
-          console.log(`Destroyed Y.Doc for room ${roomId}`);
-        }
+    const handleBeforeUnload = () => {
+      if (ydoc && documentsMap.has(roomId)) {
+        ydoc.destroy();
+        documentsMap.delete(roomId);
       }
     };
-  }, [roomId]);
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (roomId && documentsMap.has(roomId)) {
+        const doc = documentsMap.get(roomId);
+        doc.destroy();
+        documentsMap.delete(roomId);
+      }
+    };
+  }, [roomId, ydoc]);
 
   return (
     <YjsContext.Provider value={{ 
