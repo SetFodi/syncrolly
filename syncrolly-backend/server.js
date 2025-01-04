@@ -1,21 +1,32 @@
-// server.js
+/************************************************************
+ * server.js (ES Module style, keep .js extension)
+ * 
+ * Because package.json has "type": "module", 
+ * Node will interpret this as an ES module.
+ *************************************************************/
 
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const multer = require('multer');
-const path = require('path');
-const { MongoClient, ObjectId } = require('mongodb');
-const fs = require('fs');
-const cors = require('cors');
-const cron = require('node-cron');
-const dotenv = require('dotenv');
-const _ = require('lodash');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import multer from 'multer';
+import path from 'path';
+import { MongoClient, ObjectId } from 'mongodb';
+import fs from 'fs';
+import cors from 'cors';
+import cron from 'node-cron';
+import dotenv from 'dotenv';
+import _ from 'lodash';
+
+// For __dirname in ES modules:
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Create Express app & HTTP server
 const app = express();
-const server = http.createServer(app); // Express server
+const server = http.createServer(app);
 
 // =====================
 // ===== CORS Setup =====
@@ -34,11 +45,11 @@ app.use(cors({
 
 // Preflight handling (applicable for DELETE and POST requests)
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', allowedFrontendUrls.join(',')); // Allow specified origins
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); // Allowed methods
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Allowed headers
-  res.header('Access-Control-Allow-Credentials', 'true'); // Allow credentials if needed
-  res.sendStatus(200); // Respond OK to preflight
+  res.header('Access-Control-Allow-Origin', allowedFrontendUrls.join(',')); 
+  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
 });
 
 // =========================
@@ -73,7 +84,8 @@ const storage = multer.diskStorage({
   },
 });
 const allowedExtensions = [
-  '.jpeg', '.jpg', '.png', '.pdf', '.txt', '.html', '.js', '.css', '.zip', '.rar', '.py', '.php', '.7z'
+  '.jpeg', '.jpg', '.png', '.pdf', '.txt', '.html', '.js', '.css',
+  '.zip', '.rar', '.py', '.php', '.7z'
 ];
 
 const upload = multer({
@@ -81,10 +93,10 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    console.log('File extension:', ext); // Log the file extension for debugging
+    console.log('File extension:', ext); // Log extension for debugging
 
     if (allowedExtensions.includes(ext)) {
-      cb(null, true); // File extension is allowed
+      cb(null, true); // Extension allowed
     } else {
       cb(new Error('Invalid file type. Only images, PDFs, text files, HTML, JS, CSS, Python, PHP, ZIP, RAR, 7z files are allowed.'));
     }
@@ -94,15 +106,15 @@ const upload = multer({
 // ============================
 // ===== Socket.IO Setup =====
 // ============================
-const socketUserMap = new Map(); // Map to store socket.id => { userId, roomId }
-
-// Initialize Socket.IO with Express server
 const io = new Server(server, {
   cors: {
     origin: allowedFrontendUrls,
     methods: ['GET', 'POST'],
   },
 });
+
+// A map to store socket.id => { userId, roomId }
+const socketUserMap = new Map();
 
 // =======================
 // ===== File Routes =====
@@ -173,7 +185,6 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
     }
 
     const fileToDelete = await uploadsCollection.findOne({ roomId, _id: new ObjectId(fileId) });
-
     if (!fileToDelete) {
       res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
       return res.status(404).json({ error: 'File not found.' });
@@ -183,7 +194,6 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
     const filePath = path.join(uploadsDir, path.basename(fileToDelete.fileUrl));
 
     try {
-      // Use fs.promises.unlink for consistency with async/await
       await fs.promises.unlink(filePath);
       console.log('File deleted from filesystem:', filePath);
     } catch (err) {
@@ -198,21 +208,20 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in file deletion:', error);
-
     res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
 
-// The function `saveContentToMongo` should store `text` in MongoDB as below:
+// The function `saveContentToMongo` should store `text` in MongoDB
 async function saveContentToMongo(roomId, text) {
   try {
-    const result = await roomsCollection.updateOne(
+    await roomsCollection.updateOne(
       { roomId },
       { 
         $set: { 
-          text: text,  // Save 'text' instead of 'content'
-          lastActivity: new Date() 
+          text,
+          lastActivity: new Date(),
         }
       },
       { upsert: true }
@@ -230,92 +239,94 @@ io.on('connection', async (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   // Add the connected user to MongoDB
-  await activeUsersCollection.insertOne({ socketId: socket.id, connectedAt: new Date() });
+  await activeUsersCollection.insertOne({
+    socketId: socket.id,
+    connectedAt: new Date()
+  });
 
   // Emit the total connected users count to all clients
   const totalConnectedUsers = await activeUsersCollection.countDocuments();
   io.emit('status_update', { totalConnectedUsers });
 
-socket.on('save_content', async ({ roomId, text }, callback) => {
-  try {
-    await roomsCollection.updateOne(
-      { roomId },
-      { 
-        $set: { 
-          text: text,
-          lastActivity: new Date() 
-        }
-      },
-      { upsert: true }
-    );
-    console.log(`Content saved to MongoDB for room ${roomId}:`, text.substring(0, 100) + '...'); // Log first 100 chars
-    
-    if (callback) {
-      callback({ success: true });
+  socket.on('save_content', async ({ roomId, text }, callback) => {
+    try {
+      await roomsCollection.updateOne(
+        { roomId },
+        { 
+          $set: {
+            text,
+            lastActivity: new Date()
+          }
+        },
+        { upsert: true }
+      );
+      console.log(`Content saved to MongoDB for room ${roomId}:`, text.substring(0, 100) + '...');
+      
+      if (callback) {
+        callback({ success: true });
+      }
+    } catch (error) {
+      console.error('Error saving content to MongoDB:', error);
+      if (callback) {
+        callback({ success: false, error: error.message });
+      }
     }
-  } catch (error) {
-    console.error('Error saving content to MongoDB:', error);
-    if (callback) {
-      callback({ success: false, error: error.message });
-    }
-  }
-});
+  });
+
   // Handle room joining
-socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-  try {
-    let room = await roomsCollection.findOne({ roomId });
+  socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
+    try {
+      let room = await roomsCollection.findOne({ roomId });
 
-    if (!room) {
-      if (isCreator) {
-        room = {
-          roomId,
-          text: '', // Initialize with empty text
-          messages: [],
-          users: {},
-          theme: 'light',
-          lastActivity: new Date(),
-          creatorId: userId,
-          isEditable: true
-        };
-        await roomsCollection.insertOne(room);
-      } else {
-        return callback({ error: 'Room does not exist.' });
-      }
-    }
-
-    // Add user to room
-    room.users[userId] = userName;
-    await roomsCollection.updateOne(
-      { roomId },
-      { 
-        $set: { 
-          users: room.users,
-          lastActivity: new Date()
+      if (!room) {
+        if (isCreator) {
+          room = {
+            roomId,
+            text: '', // Initialize with empty text
+            messages: [],
+            users: {},
+            theme: 'light',
+            lastActivity: new Date(),
+            creatorId: userId,
+            isEditable: true
+          };
+          await roomsCollection.insertOne(room);
+        } else {
+          return callback({ error: 'Room does not exist.' });
         }
       }
-    );
 
-    socket.join(roomId);
-    socketUserMap.set(socket.id, { userId, roomId });
+      // Add user to room
+      room.users[userId] = userName;
+      await roomsCollection.updateOne(
+        { roomId },
+        { 
+          $set: {
+            users: room.users,
+            lastActivity: new Date()
+          }
+        }
+      );
 
-    // Send the complete room state including the text content
-    callback({
-      success: true,
-      text: room.text || '', // Always send the text content
-      messages: room.messages,
-      theme: room.theme,
-      files: await uploadsCollection.find({ roomId }).toArray(),
-      users: room.users,
-      isCreator: room.creatorId === userId,
-      isEditable: room.isEditable
-    });
-  } catch (error) {
-    console.error('Error in join_room:', error);
-    callback({ error: 'Internal Server Error' });
-  }
-});
+      socket.join(roomId);
+      socketUserMap.set(socket.id, { userId, roomId });
 
-
+      // Send the complete room state including the text content
+      callback({
+        success: true,
+        text: room.text || '',
+        messages: room.messages,
+        theme: room.theme,
+        files: await uploadsCollection.find({ roomId }).toArray(),
+        users: room.users,
+        isCreator: (room.creatorId === userId),
+        isEditable: room.isEditable
+      });
+    } catch (error) {
+      console.error('Error in join_room:', error);
+      callback({ error: 'Internal Server Error' });
+    }
+  });
 
   // Handle toggle_editability
   socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
@@ -335,7 +346,7 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
         { $set: { isEditable: newEditableState } }
       );
 
-      // Emit to all clients in the specific room only
+      // Notify all clients in the room
       io.to(roomId).emit('editable_state_changed', { isEditable: newEditableState });
 
       callback({ success: true, isEditable: newEditableState });
@@ -359,14 +370,13 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
         return callback({ error: 'Only the room creator can toggle the editor mode.' });
       }
 
-      const newEditorMode = room.editorMode === 'code' ? 'text' : 'code';
+      const newEditorMode = (room.editorMode === 'code') ? 'text' : 'code';
       await roomsCollection.updateOne(
         { roomId },
         { $set: { editorMode: newEditorMode, lastActivity: new Date() } }
       );
 
       io.to(roomId).emit('editor_mode_changed', { roomId, editorMode: newEditorMode });
-
       console.log(`Room ${roomId} editor mode changed to ${newEditorMode} by user ${userId}`);
 
       if (callback) {
@@ -386,10 +396,10 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
       const room = await roomsCollection.findOne({ roomId });
       if (!room) return;
 
-      const userName = room.users[userId];
-      if (!userName) return;
+      const name = room.users[userId];
+      if (!name) return;
 
-      const fullMessage = { userName, text: message };
+      const fullMessage = { userName: name, text: message };
       room.messages.push(fullMessage);
 
       await roomsCollection.updateOne(
@@ -419,38 +429,12 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
         { roomId },
         { $set: { theme, lastActivity: new Date() } }
       );
-
       io.to(roomId).emit('theme_changed', theme);
     } catch (error) {
       console.error('Error in change_theme:', error);
     }
   });
 
-  // **Remove the following Socket.IO event handler to prevent duplication**
-  /*
-  // Handle editor content
-  socket.on('send_editor_content', async ({ roomId, userId, currentText }) => {
-    try {
-      const room = await roomsCollection.findOne({ roomId });
-      if (room) {
-        // Save the current text to the room document in the database
-        await roomsCollection.updateOne(
-          { roomId },
-          { 
-            $set: { 
-              text: currentText,
-              lastActivity: new Date()
-            }
-          }
-        );
-        console.log(`Saved text for room ${roomId} by user ${userId}`);
-      }
-    } catch (error) {
-      console.error('Error saving editor content:', error);
-    }
-  });
-  */
-  
   // Modify the disconnect handler to remove room.text handling
   socket.on('disconnect', async () => {
     console.log(`User disconnected: ${socket.id}`);
@@ -459,47 +443,14 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
     if (userInfo) {
       const { roomId, userId } = userInfo;
 
-      // Get the room and check if this is the last user
       const room = await roomsCollection.findOne({ roomId });
       if (room) {
         delete room.users[userId];
 
-        // **Remove the following code related to room.text**
-        /*
-        if (Object.keys(room.users).length === 0) {
-          const finalText = room.text; // Make sure to capture the final text state
-          await roomsCollection.updateOne(
-            { roomId },
-            { 
-              $set: { 
-                users: room.users,
-                text: finalText,
-                lastActivity: new Date()
-              }
-            }
-          );
-        } else {
-          await roomsCollection.updateOne(
-            { roomId },
-            { 
-              $set: { 
-                users: room.users,
-                lastActivity: new Date()
-              }
-            }
-          );
-        }
-        */
-
-        // Only update users and lastActivity
+        // Only update users and lastActivity (no text changes)
         await roomsCollection.updateOne(
           { roomId },
-          { 
-            $set: { 
-              users: room.users,
-              lastActivity: new Date()
-            }
-          }
+          { $set: { users: room.users, lastActivity: new Date() } }
         );
 
         io.emit('room_users', { roomId, users: room.users });
@@ -509,8 +460,8 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
     }
 
     await activeUsersCollection.deleteOne({ socketId: socket.id });
-    const totalConnectedUsers = await activeUsersCollection.countDocuments();
-    io.emit('status_update', { totalConnectedUsers });
+    const newTotalUsers = await activeUsersCollection.countDocuments();
+    io.emit('status_update', { totalConnectedUsers: newTotalUsers });
   });
 });
 
@@ -537,13 +488,11 @@ cron.schedule('0 * * * *', async () => {
       const { roomId } = room;
 
       const associatedFiles = await uploadsCollection.find({ roomId }).toArray();
-
       for (const file of associatedFiles) {
         const filename = path.basename(file.fileUrl);
         const filePath = path.join(uploadsDir, filename);
 
         try {
-          // Use fs.promises.unlink for consistency with async/await
           await fs.promises.unlink(filePath);
           console.log(`Deleted file ${filename} from filesystem.`);
         } catch (err) {
@@ -551,9 +500,9 @@ cron.schedule('0 * * * *', async () => {
         }
       }
 
-      // Delete files from database
+      // Delete files from the database
       const deleteFilesResult = await uploadsCollection.deleteMany({ roomId });
-      console.log(`Deleted ${deleteFilesResult.deletedCount} file(s) from uploads collection for room ${roomId}.`);
+      console.log(`Deleted ${deleteFilesResult.deletedCount} file(s) from uploads for room ${roomId}.`);
 
       // Delete room from database
       const deleteRoomResult = await roomsCollection.deleteOne({ roomId });
@@ -563,7 +512,7 @@ cron.schedule('0 * * * *', async () => {
         console.warn(`Failed to delete room ${roomId} from rooms collection.`);
       }
 
-      // Emit a deletion event (if users are still connected)
+      // Emit a deletion event (if any users are still connected)
       io.to(roomId).emit('room_deleted', {
         message: 'This room has been deleted due to inactivity.',
         deleteAfter: new Date(),
@@ -587,7 +536,6 @@ async function startServer() {
     uploadsCollection = db.collection('uploads');
     activeUsersCollection = db.collection('activeUsers');
 
-    // Start the server
     const PORT = process.env.PORT || 4000;
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on port ${PORT}`);
@@ -598,5 +546,5 @@ async function startServer() {
   }
 }
 
-// Call startServer to initialize the application
+// Initialize the application
 startServer();
