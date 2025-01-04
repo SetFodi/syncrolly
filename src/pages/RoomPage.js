@@ -173,57 +173,10 @@ useEffect(() => {
   }
 }, [ydoc, isYjsSynced]);
 
- // Add this to your RoomPageContent component
-useEffect(() => {
-  return () => {
-    if (ydoc && isYjsSynced) {
-      const content = ydoc.getText('shared-text').toString();
-      if (content.trim()) {
-        socket.emit('save_content', { 
-          roomId,
-          text: content 
-        });
-      }
-    }
-  };
-}, [ydoc, isYjsSynced, roomId]);
 
 
-  // Handle Awareness State
-useEffect(() => {
-  if (!ydoc || !isYjsSynced || !isNameSet) return;
 
-  const ytext = ydoc.getText('shared-text');
-  
-  const debouncedSave = debounce((content) => {
-    if (!content.trim()) return;
-    
-    socket.emit('save_content', { 
-      roomId,
-      text: content
-    }, (response) => {
-      if (response?.success) {
-        console.log('Content successfully saved to MongoDB');
-      } else {
-        console.error('Failed to save content:', response?.error);
-      }
-    });
-  }, 2000);
-  
-  const observer = () => {
-    const content = ytext.toString();
-    if (content !== null && content !== undefined) {
-      debouncedSave(content);
-    }
-  };
 
-  ytext.observe(observer);
-
-  return () => {
-    ytext.unobserve(observer);
-    debouncedSave.cancel();
-  };
-}, [ydoc, isYjsSynced, isNameSet, roomId]);
 
   // Handle synchronization timeout
   useEffect(() => {
