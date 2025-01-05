@@ -73,36 +73,31 @@ async function checkRoomExists(roomName) {
 const debounce = require('lodash.debounce');
 
 // Function to sync Yjs updates to MongoDB
-async function syncToMongo(roomName, ydoc) {
-    try {
-        const content = ydoc.getText('shared-text').toString();
-        if (!content.trim()) return; // Skip empty content
+const debounce = require('lodash.debounce');
 
-        const roomExists = await checkRoomExists(roomName);
-        if (!roomExists) {
-            console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
-            return;
-        }
+const syncToMongo = async (roomName, ydoc) => {
+  try {
+    const content = ydoc.getText('shared-text').toString();
+    if (!content.trim()) return;
 
-        await roomsCollection.updateOne(
-            { roomId: roomName },
-            {
-                $set: {
-                    text: content,
-                    lastActivity: new Date(),
-                },
-            }
-        );
-        console.log(`Successfully synced document "${roomName}" to MongoDB`);
-    } catch (err) {
-        console.error(`Error syncing "${roomName}" to MongoDB:`, err);
+    const roomExists = await checkRoomExists(roomName);
+    if (!roomExists) {
+      console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
+      return;
     }
-}
 
-// Debounced sync function
-const debouncedSyncToMongo = debounce((roomName, ydoc) => {
-    syncToMongo(roomName, ydoc);
-}, 2000); // Adjust the debounce delay as needed (e.g., 2000ms)
+    await roomsCollection.updateOne(
+      { roomId: roomName },
+      { $set: { text: content, lastActivity: new Date() } }
+    );
+    console.log(`Successfully synced document "${roomName}" to MongoDB`);
+  } catch (error) {
+    console.error(`Error syncing "${roomName}" to MongoDB:`, error);
+  }
+};
+
+const debouncedSyncToMongo = debounce(syncToMongo, 2000);
+
 
 // Attach Yjs update listener
 ydoc.on('update', () => {
