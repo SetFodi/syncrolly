@@ -168,6 +168,40 @@ wss.on('connection', async (conn, request) => {
 
     const { ydoc, awareness } = docInfo;
 
+conn.on('message', async (message) => {
+    try {
+        const parsedMessage = JSON.parse(message);
+
+        if (parsedMessage.type === 'fetch_content') {
+            const { roomId } = parsedMessage.data;
+
+            if (!roomId || typeof roomId !== 'string') {
+                const response = { type: 'fetch_content_response', data: { success: false, error: "Invalid roomId." } };
+                conn.send(JSON.stringify(response));
+                return;
+            }
+
+            // Retrieve content from MongoDB
+            const room = await roomsCollection.findOne({ roomId });
+            if (room?.text) {
+                const response = { type: 'fetch_content_response', data: { success: true, text: room.text } };
+                conn.send(JSON.stringify(response));
+            } else {
+                const response = { type: 'fetch_content_response', data: { success: false, error: "No content found for the room." } };
+                conn.send(JSON.stringify(response));
+            }
+        } else {
+            console.warn('Received unexpected message type:', parsedMessage.type);
+        }
+    } catch (err) {
+        console.error('Error handling fetch_content:', err);
+        const errorResponse = { type: 'fetch_content_response', data: { success: false, error: 'Internal Server Error' } };
+        conn.send(JSON.stringify(errorResponse));
+    }
+});
+
+
+    
     // Set up persistence interval
     const intervalId = setInterval(async () => {
       try {
