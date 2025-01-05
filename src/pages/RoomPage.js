@@ -565,9 +565,12 @@ useEffect(() => {
               </p>
             )}
           </div>
-         <div className={styles['refresh-note']} style={{ ...refreshNoteStyle, textAlign: 'center', padding: '10px' }}>
-            <p><strong>Note:</strong> If you believe there should be content in this room but see nothing, try refreshing the page a couple of times.</p>
-          </div>
+
+
+        <div className={styles['refresh-note']}>
+          <p><strong>Note:</strong> If you believe there should be content in this room but see nothing, try refreshing the page a couple of times.</p>
+        </div>
+
 
           <div className={`${styles['chat-box']} ${chatVisible ? styles['open'] : ''} ${styles[theme]}`}>
             <button onClick={toggleChatBox} className={styles['close-btn']} aria-label="Close Chat">
