@@ -212,6 +212,31 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
+app.get('/room/:roomId/content', async (req, res) => {
+  try {
+    const room = await roomsCollection.findOne({ roomId: req.params.roomId });
+    if (!room) return res.status(404).json({ error: 'Room not found' });
+    res.json({ text: room.text || '' });
+  } catch (error) {
+    console.error('Error fetching room content:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/room/:roomId/content', async (req, res) => {
+  try {
+    const { text } = req.body;
+    await roomsCollection.updateOne(
+      { roomId: req.params.roomId },
+      { $set: { text, lastActivity: new Date() } },
+      { upsert: true }
+    );
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error saving room content:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 // The function `saveContentToMongo` should store `text` in MongoDB
 async function saveContentToMongo(roomId, text) {
