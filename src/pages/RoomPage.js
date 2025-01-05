@@ -196,6 +196,72 @@ useEffect(() => {
 }, [ydoc, isYjsSynced, roomId]);
 
 
+useEffect(() => {
+  const fetchInitialContent = async () => {
+    try {
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.text && ydoc) {
+        console.log('Fetched initial content from backend:', data.text.substring(0, 100));
+        const ytext = ydoc.getText('shared-text');
+        ytext.delete(0, ytext.length); // Clear existing content in Yjs
+        ytext.insert(0, data.text); // Set content from backend
+        contentSyncedRef.current = true; // Mark as synced
+      }
+    } catch (error) {
+      console.error('Error fetching initial content:', error);
+    }
+  };
+
+  if (ydoc && isYjsSynced && !contentSyncedRef.current) {
+    fetchInitialContent();
+  }
+}, [ydoc, isYjsSynced, roomId, backendUrl]);
+
+  useEffect(() => {
+  if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
+
+  const ytext = ydoc.getText('shared-text');
+  let lastSavedContent = ytext.toString();
+
+  const debouncedSave = debounce(async (content) => {
+    if (!content.trim() || content === lastSavedContent) return;
+
+    console.log('Saving updated content to MongoDB:', content.substring(0, 100));
+    lastSavedContent = content;
+
+    const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: content }),
+      credentials: 'include',
+    });
+
+    if (response.ok) {
+      console.log('Content successfully saved to MongoDB');
+    } else {
+      console.error('Failed to save content to MongoDB');
+    }
+  }, 2000);
+
+  const observer = () => {
+    const content = ytext.toString();
+    debouncedSave(content);
+  };
+
+  ytext.observe(observer);
+
+  return () => {
+    ytext.unobserve(observer);
+    debouncedSave.cancel();
+  };
+}, [ydoc, isYjsSynced, roomId, backendUrl]);
+
+
   // Handle Awareness State
 useEffect(() => {
   if (!ydoc || !isYjsSynced || !isNameSet || !contentSyncedRef.current) return;
