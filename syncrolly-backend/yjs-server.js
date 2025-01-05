@@ -179,13 +179,16 @@ wss.on('connection', async (conn, request) => {
 
 conn.on('message', async (message) => {
   try {
-    const parsedMessage = JSON.parse(message);
+    const messageString = typeof message === 'string' ? message : Buffer.from(message).toString();
+    const parsedMessage = JSON.parse(messageString);
+
+    console.log('Parsed WebSocket message:', parsedMessage);
 
     if (parsedMessage.type === 'fetch_content') {
       const { roomId } = parsedMessage.data;
 
       if (!roomId || typeof roomId !== 'string') {
-        const response = { type: 'fetch_content_response', data: { success: false, error: "Invalid roomId." } };
+        const response = { type: 'fetch_content_response', data: { success: false, error: 'Invalid roomId.' } };
         conn.send(JSON.stringify(response));
         return;
       }
@@ -196,18 +199,19 @@ conn.on('message', async (message) => {
         const response = { type: 'fetch_content_response', data: { success: true, text: room.text } };
         conn.send(JSON.stringify(response));
       } else {
-        const response = { type: 'fetch_content_response', data: { success: false, error: "No content found for the room." } };
+        const response = { type: 'fetch_content_response', data: { success: false, error: 'No content found for the room.' } };
         conn.send(JSON.stringify(response));
       }
     } else {
       console.warn('Received unexpected message type:', parsedMessage.type);
     }
   } catch (err) {
-    console.error('Error handling fetch_content:', err);
+    console.error('Error handling WebSocket message:', err);
     const errorResponse = { type: 'fetch_content_response', data: { success: false, error: 'Internal Server Error' } };
     conn.send(JSON.stringify(errorResponse));
   }
 });
+
 
 
     
