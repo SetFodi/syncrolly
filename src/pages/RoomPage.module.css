@@ -60,6 +60,16 @@ html, body {
   transition: transform 0.3s ease, filter 0.3s ease;
   filter: brightness(0) invert(0);
 }
+/* In RoomPage.module.css */
+
+.refresh-note {
+  text-align: center;
+  padding: 10px;
+  background-color: #f9f9f9; /* Example style */
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  /* Add more styles as needed */
+}
 
 .syncrolly-logo:hover {
   transform: scale(1.05);
