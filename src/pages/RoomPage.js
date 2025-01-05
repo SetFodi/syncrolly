@@ -170,16 +170,24 @@ useEffect(() => {
     
 // 2. Add a sync completion check
 useEffect(() => {
-  if (ydoc && isYjsSynced && !hasInitialSync.current) {
-    hasInitialSync.current = true;
-    contentSyncedRef.current = true;
-    console.log('Yjs initial sync completed');
-    
-    // Log the current content after sync for debugging
-    const currentContent = ydoc.getText('shared-text').toString();
-    console.log('Content after Yjs sync:', currentContent.substring(0, 100) + '...');
-  }
-}, [ydoc, isYjsSynced]);
+    if (ydoc && isYjsSynced && !hasInitialSync.current) {
+        hasInitialSync.current = true;
+        const ytext = ydoc.getText('shared-text');
+        
+        if (!ytext.toString().trim()) { // Check if Yjs document content is empty
+            console.log("Yjs content is empty. Fetching from MongoDB...");
+            socket.emit('fetch_content', { roomId }, (response) => {
+                if (response.success && response.text) {
+                    ytext.insert(0, response.text); // Populate Yjs document with MongoDB content
+                    console.log("Content loaded from MongoDB into Yjs.");
+                } else {
+                    console.error("Failed to fetch content from MongoDB:", response.error || "Unknown error");
+                }
+            });
+        }
+    }
+}, [ydoc, isYjsSynced, roomId]);
+
  // Add this to your RoomPageContent component
 useEffect(() => {
   return () => {
