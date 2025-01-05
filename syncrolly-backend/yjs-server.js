@@ -44,16 +44,17 @@ const lastAccess = new Map();
 // Helper function to load document state
 async function loadDocument(roomName) {
     try {
-        const ydoc = await ldb.getYDoc(roomName); // Try to get the Yjs document from LevelDB.
+        const ydoc = new Y.Doc(); // Start with a fresh Yjs document
 
-        // Load content from MongoDB if Yjs is empty
-        if (ydoc.getText('shared-text').toString().trim() === '') {
-            const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
-            if (mongoDoc?.text) {
-                ydoc.getText('shared-text').insert(0, mongoDoc.text);
-                console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
-            }
+        // Load content from MongoDB
+        const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+        if (mongoDoc?.text) {
+            ydoc.getText('shared-text').insert(0, mongoDoc.text);
+            console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
+        } else {
+            console.log(`No content found in MongoDB for room: ${roomName}`);
         }
+
         return ydoc;
     } catch (err) {
         console.error(`Error loading document "${roomName}":`, err);
@@ -62,52 +63,53 @@ async function loadDocument(roomName) {
 }
 
 
+
 async function checkRoomExists(roomName) {
   if (!roomsCollection) return false;
   const room = await roomsCollection.findOne({ roomId: roomName });
   return !!room;
 }
 
-// 2. Modify the syncToMongo function to be more selective
-async function syncToMongo(roomName, ydoc, retries = 3) {
-  for (let i = 0; i < retries; i++) {
+const debounce = require('lodash.debounce');
+
+// Function to sync Yjs updates to MongoDB
+async function syncToMongo(roomName, ydoc) {
     try {
-      const roomExists = await checkRoomExists(roomName);
-      if (!roomExists) {
-        console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
-        return false;
-      }
+        const content = ydoc.getText('shared-text').toString();
+        if (!content.trim()) return; // Skip empty content
 
-      const content = ydoc.getText('shared-text').toString();
-      if (!content.trim()) return false;
-
-      // Get current MongoDB content
-      const currentDoc = await roomsCollection.findOne({ roomId: roomName });
-      if (currentDoc?.text === content) {
-        console.log(`Content unchanged for "${roomName}", skipping sync`);
-        return true;
-      }
-
-      await roomsCollection.updateOne(
-        { roomId: roomName },
-        {
-          $set: {
-            text: content,
-            lastActivity: new Date(),
-            lastSync: new Date(),
-          },
+        const roomExists = await checkRoomExists(roomName);
+        if (!roomExists) {
+            console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
+            return;
         }
-      );
-      console.log(`Successfully synced document "${roomName}" to MongoDB`);
-      return true;
+
+        await roomsCollection.updateOne(
+            { roomId: roomName },
+            {
+                $set: {
+                    text: content,
+                    lastActivity: new Date(),
+                },
+            }
+        );
+        console.log(`Successfully synced document "${roomName}" to MongoDB`);
     } catch (err) {
-      console.error(`Attempt ${i + 1} to sync "${roomName}" to MongoDB failed:`, err);
-      if (i === retries - 1) throw err;
-      await new Promise(resolve => setTimeout(resolve, 1000));
+        console.error(`Error syncing "${roomName}" to MongoDB:`, err);
     }
-  }
-  return false;
 }
+
+// Debounced sync function
+const debouncedSyncToMongo = debounce((roomName, ydoc) => {
+    syncToMongo(roomName, ydoc);
+}, 2000); // Adjust the debounce delay as needed (e.g., 2000ms)
+
+// Attach Yjs update listener
+ydoc.on('update', () => {
+    debouncedSyncToMongo(roomName, ydoc);
+});
+
+
 
 async function cleanupDocument(roomName) {
     try {
