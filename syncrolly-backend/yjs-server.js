@@ -44,31 +44,22 @@ const lastAccess = new Map();
 // Helper function to load document state
 async function loadDocument(roomName) {
     try {
-        // Fetch from MongoDB first
-        const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
-        const ydoc = new Y.Doc();
+        const ydoc = await ldb.getYDoc(roomName); // Try to get the Yjs document from LevelDB.
 
-        if (mongoDoc?.text) {
-            ydoc.getText('shared-text').insert(0, mongoDoc.text);
-            console.log(`Loaded content from MongoDB for room: ${roomName}`);
-        } else {
-            // If no content in MongoDB, fallback to LevelDB
-            console.log(`No content in MongoDB for room: ${roomName}, checking LevelDB...`);
-            const levelDbDoc = await ldb.getYDoc(roomName);
-            const levelDbContent = levelDbDoc.getText('shared-text').toString();
-            if (levelDbContent.trim()) {
-                ydoc.getText('shared-text').insert(0, levelDbContent);
-                console.log(`Loaded content from LevelDB for room: ${roomName}`);
+        // Load content from MongoDB if Yjs is empty
+        if (ydoc.getText('shared-text').toString().trim() === '') {
+            const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+            if (mongoDoc?.text) {
+                ydoc.getText('shared-text').insert(0, mongoDoc.text);
+                console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
             }
         }
-
         return ydoc;
     } catch (err) {
         console.error(`Error loading document "${roomName}":`, err);
         throw err;
     }
 }
-
 
 
 async function checkRoomExists(roomName) {
@@ -177,50 +168,6 @@ wss.on('connection', async (conn, request) => {
 
     const { ydoc, awareness } = docInfo;
 
-conn.on('message', async (message) => {
-  try {
-    if (typeof message !== 'string') {
-      // Likely a Yjs binary message; skip JSON parsing
-      console.log('Received binary message (not JSON), passing to Yjs.');
-      return; // Exit the handler for non-JSON messages
-    }
-
-    // Parse JSON message
-    const parsedMessage = JSON.parse(message);
-
-    console.log('Parsed WebSocket message:', parsedMessage);
-
-    if (parsedMessage.type === 'fetch_content') {
-      const { roomId } = parsedMessage.data;
-
-      if (!roomId || typeof roomId !== 'string') {
-        const response = { type: 'fetch_content_response', data: { success: false, error: 'Invalid roomId.' } };
-        conn.send(JSON.stringify(response));
-        return;
-      }
-
-      // Retrieve content from MongoDB
-      const room = await roomsCollection.findOne({ roomId });
-      if (room?.text) {
-        const response = { type: 'fetch_content_response', data: { success: true, text: room.text } };
-        conn.send(JSON.stringify(response));
-      } else {
-        const response = { type: 'fetch_content_response', data: { success: false, error: 'No content found for the room.' } };
-        conn.send(JSON.stringify(response));
-      }
-    } else {
-      console.warn('Received unexpected message type:', parsedMessage.type);
-    }
-  } catch (err) {
-    console.error('Error handling WebSocket message:', err);
-    const errorResponse = { type: 'fetch_content_response', data: { success: false, error: 'Internal Server Error' } };
-    conn.send(JSON.stringify(errorResponse));
-  }
-});
-
-
-
-    
     // Set up persistence interval
     const intervalId = setInterval(async () => {
       try {
