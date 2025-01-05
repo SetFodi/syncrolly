@@ -179,8 +179,14 @@ wss.on('connection', async (conn, request) => {
 
 conn.on('message', async (message) => {
   try {
-    const messageString = typeof message === 'string' ? message : Buffer.from(message).toString();
-    const parsedMessage = JSON.parse(messageString);
+    if (typeof message !== 'string') {
+      // Likely a Yjs binary message; skip JSON parsing
+      console.log('Received binary message (not JSON), passing to Yjs.');
+      return; // Exit the handler for non-JSON messages
+    }
+
+    // Parse JSON message
+    const parsedMessage = JSON.parse(message);
 
     console.log('Parsed WebSocket message:', parsedMessage);
 
