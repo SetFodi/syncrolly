@@ -44,8 +44,8 @@ const lastAccess = new Map();
 // Helper function to load document state
 async function loadDocument(roomName) {
   try {
-    // Try to load existing state from LevelDB
-    const persistedYdoc = await ldb.getYDoc(roomName);
+    // First try to get existing doc from memory
+   const persistedYdoc = await ldb.getYDoc(roomName);
     if (persistedYdoc) {
       return persistedYdoc;
     }
@@ -54,15 +54,14 @@ async function loadDocument(roomName) {
     const ydoc = new Y.Doc();
     
     // Try to get content from MongoDB
-    const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
     if (mongoDoc?.text) {
       const ytext = ydoc.getText('shared-text');
-      ytext.insert(0, mongoDoc.text);
-      console.log(`Loaded content from MongoDB for "${roomName}"`);
-      
-      // Store initial state in LevelDB
-      const update = Y.encodeStateAsUpdate(ydoc);
-      await ldb.storeUpdate(roomName, update);
+      // Only insert if the text is empty
+      if (ytext.toString().trim() === '') {
+        ytext.insert(0, mongoDoc.text);
+        console.log(`Loaded initial content from MongoDB for "${roomName}"`);
+      }
     }
     
     return ydoc;
@@ -78,6 +77,7 @@ async function checkRoomExists(roomName) {
   return !!room;
 }
 
+// 2. Modify the syncToMongo function to be more selective
 async function syncToMongo(roomName, ydoc, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -89,6 +89,13 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
 
       const content = ydoc.getText('shared-text').toString();
       if (!content.trim()) return false;
+
+      // Get current MongoDB content
+      const currentDoc = await roomsCollection.findOne({ roomId: roomName });
+      if (currentDoc?.text === content) {
+        console.log(`Content unchanged for "${roomName}", skipping sync`);
+        return true;
+      }
 
       await roomsCollection.updateOne(
         { roomId: roomName },
@@ -105,7 +112,7 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
     } catch (err) {
       console.error(`Attempt ${i + 1} to sync "${roomName}" to MongoDB failed:`, err);
       if (i === retries - 1) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   return false;
