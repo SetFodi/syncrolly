@@ -9,6 +9,7 @@ import { Awareness } from 'y-protocols/awareness.js';
 import path from 'path';
 import fs from 'fs';
 import { MongoClient } from 'mongodb';
+import debounce from 'lodash.debounce';
 
 // For __dirname in ES modules
 import { fileURLToPath } from 'url';
@@ -70,7 +71,6 @@ async function checkRoomExists(roomName) {
   return !!room;
 }
 
-const debounce = require('lodash.debounce');
 
 const syncToMongo = async (roomName, ydoc) => {
   try {
