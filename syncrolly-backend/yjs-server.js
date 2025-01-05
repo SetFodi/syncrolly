@@ -72,9 +72,6 @@ async function checkRoomExists(roomName) {
 
 const debounce = require('lodash.debounce');
 
-// Function to sync Yjs updates to MongoDB
-const debounce = require('lodash.debounce');
-
 const syncToMongo = async (roomName, ydoc) => {
   try {
     const content = ydoc.getText('shared-text').toString();
