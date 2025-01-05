@@ -96,11 +96,6 @@ const syncToMongo = async (roomName, ydoc) => {
 const debouncedSyncToMongo = debounce(syncToMongo, 2000);
 
 
-// Attach Yjs update listener
-ydoc.on('update', () => {
-    debouncedSyncToMongo(roomName, ydoc);
-});
-
 
 
 async function cleanupDocument(roomName) {
@@ -158,6 +153,9 @@ wss.on('connection', async (conn, request) => {
       const awareness = new Awareness(ydoc);
       docsMap.set(roomName, { ydoc, awareness });
       docInfo = { ydoc, awareness };
+       ydoc.on('update', () => {
+                debouncedSyncToMongo(roomName, ydoc);
+            });
     }
 
     const { ydoc, awareness } = docInfo;
