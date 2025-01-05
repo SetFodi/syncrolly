@@ -70,28 +70,27 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-useEffect(() => {
-  if (isNameSet && ydoc) {
-    setLoading(true);
-    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+  useEffect(() => {
+    if (isNameSet && ydoc) {
+      setLoading(true);
+      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-      console.log('join_room response:', response);
-      if (response.error) {
-        alert(response.error);
-        setLoading(false);
-        return;
-      }
-      if (response.success) {
-        console.log('Joined room successfully:', response);
-        setFiles(response.files);
-        setMessages(response.messages);
-        setIsEditable(response.isEditable);
-        setIsCreator(response.isCreator);
-        setLoading(false);
-      }
-    });
-
+      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+        console.log('join_room response:', response);
+        if (response.error) {
+          alert(response.error);
+          setLoading(false);
+          return;
+        }
+        if (response.success) {
+          console.log('Joined room successfully:', response);
+          setFiles(response.files);
+          setMessages(response.messages);
+          setIsEditable(response.isEditable);
+          setIsCreator(response.isCreator);
+          setLoading(false);
+        }
+      });
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -138,20 +137,18 @@ useEffect(() => {
       });
 
       return () => {
-      socket.off('new_file');
-      socket.off('receive_message');
-      socket.off('user_typing');
-      socket.off('user_stopped_typing');
-      socket.off('editable_state_changed');
-      socket.off('theme_changed');
-      socket.off('room_deleted');
-      socket.off('room_joined');
-      socket.off('content_update');
-    };
-  }
-}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
-
-  // **Removed the useEffect that emits 'save_text_content' via Socket.IO to prevent duplication**
+        socket.off('new_file');
+        socket.off('receive_message');
+        socket.off('user_typing');
+        socket.off('user_stopped_typing');
+        socket.off('editable_state_changed');
+        socket.off('theme_changed');
+        socket.off('room_deleted');
+        socket.off('room_joined');
+        socket.off('content_update');
+      };
+    }
+  }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
   // Handle room joined event
   useEffect(() => {
@@ -167,154 +164,86 @@ useEffect(() => {
     };
   }, [ydoc, roomId]);
 
-    
-// 2. Add a sync completion check
-useEffect(() => {
-  if (ydoc && isYjsSynced && !hasInitialSync.current) {
-    hasInitialSync.current = true;
-    contentSyncedRef.current = true;
-    console.log('Yjs initial sync completed');
-    
-    // Log the current content after sync for debugging
-    const currentContent = ydoc.getText('shared-text').toString();
-    console.log('Content after Yjs sync:', currentContent.substring(0, 100) + '...');
-  }
-}, [ydoc, isYjsSynced]);
- // Add this to your RoomPageContent component
-useEffect(() => {
-  return () => {
-    if (ydoc && isYjsSynced) {
-      const content = ydoc.getText('shared-text').toString();
-      if (content.trim()) {
-        socket.emit('save_content', { 
-          roomId,
-          text: content 
+  // 1. Fetch and load initial content from backend into Yjs
+  useEffect(() => {
+    const fetchInitialContent = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+          method: 'GET',
+          credentials: 'include',
         });
+        const data = await response.json();
+
+        if (response.ok && data.text && ydoc) {
+          console.log('Fetched initial content from backend:', data.text.substring(0, 100));
+          const ytext = ydoc.getText('shared-text');
+          ytext.delete(0, ytext.length); // Clear existing content in Yjs
+          ytext.insert(0, data.text); // Set content from backend
+          contentSyncedRef.current = true; // Mark as synced
+        }
+      } catch (error) {
+        console.error('Error fetching initial content:', error);
       }
+    };
+
+    if (ydoc && isYjsSynced && !contentSyncedRef.current) {
+      fetchInitialContent();
     }
-  };
-}, [ydoc, isYjsSynced, roomId]);
+  }, [ydoc, isYjsSynced, roomId, backendUrl]);
 
+  // 2. Handle Yjs document updates and save to backend
+  useEffect(() => {
+    if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
 
-useEffect(() => {
-  const fetchInitialContent = async () => {
-    try {
+    const ytext = ydoc.getText('shared-text');
+    let lastSavedContent = ytext.toString();
+
+    const debouncedSave = debounce(async (content) => {
+      if (!content.trim() || content === lastSavedContent) return;
+
+      console.log('Saving updated content to MongoDB:', content.substring(0, 100));
+      lastSavedContent = content;
+
       const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-        method: 'GET',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content }),
         credentials: 'include',
       });
-      const data = await response.json();
 
-      if (response.ok && data.text && ydoc) {
-        console.log('Fetched initial content from backend:', data.text.substring(0, 100));
-        const ytext = ydoc.getText('shared-text');
-        ytext.delete(0, ytext.length); // Clear existing content in Yjs
-        ytext.insert(0, data.text); // Set content from backend
-        contentSyncedRef.current = true; // Mark as synced
-      }
-    } catch (error) {
-      console.error('Error fetching initial content:', error);
-    }
-  };
-
-  if (ydoc && isYjsSynced && !contentSyncedRef.current) {
-    fetchInitialContent();
-  }
-}, [ydoc, isYjsSynced, roomId, backendUrl]);
-
-  useEffect(() => {
-  if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
-
-  const ytext = ydoc.getText('shared-text');
-  let lastSavedContent = ytext.toString();
-
-  const debouncedSave = debounce(async (content) => {
-    if (!content.trim() || content === lastSavedContent) return;
-
-    console.log('Saving updated content to MongoDB:', content.substring(0, 100));
-    lastSavedContent = content;
-
-    const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: content }),
-      credentials: 'include',
-    });
-
-    if (response.ok) {
-      console.log('Content successfully saved to MongoDB');
-    } else {
-      console.error('Failed to save content to MongoDB');
-    }
-  }, 2000);
-
-  const observer = () => {
-    const content = ytext.toString();
-    debouncedSave(content);
-  };
-
-  ytext.observe(observer);
-
-  return () => {
-    ytext.unobserve(observer);
-    debouncedSave.cancel();
-  };
-}, [ydoc, isYjsSynced, roomId, backendUrl]);
-
-
-  // Handle Awareness State
-useEffect(() => {
-  if (!ydoc || !isYjsSynced || !isNameSet || !contentSyncedRef.current) return;
-
-  const ytext = ydoc.getText('shared-text');
-  let lastSavedContent = ytext.toString();
-  
-  const debouncedSave = debounce((content) => {
-    if (!content.trim() || content === lastSavedContent) return;
-    
-    console.log('Saving new content to MongoDB:', content.substring(0, 100) + '...');
-    lastSavedContent = content;
-    
-    socket.emit('save_content', { 
-      roomId,
-      text: content
-    }, (response) => {
-      if (response?.success) {
+      if (response.ok) {
         console.log('Content successfully saved to MongoDB');
       } else {
-        console.error('Failed to save content:', response?.error);
+        console.error('Failed to save content to MongoDB');
       }
-    });
-  }, 2000);
-  
-  const observer = () => {
-    // Only save if we're fully synced
-    if (contentSyncedRef.current) {
+    }, 2000);
+
+    const observer = () => {
       const content = ytext.toString();
-      if (content !== null && content !== undefined) {
-        debouncedSave(content);
-      }
-    }
-  };
+      debouncedSave(content);
+    };
 
-  ytext.observe(observer);
+    ytext.observe(observer);
 
-  return () => {
-    ytext.unobserve(observer);
-    debouncedSave.cancel();
-    
-    // Only save on unmount if we're fully synced
-    if (contentSyncedRef.current) {
-      const finalContent = ytext.toString();
-      if (finalContent.trim() && finalContent !== lastSavedContent) {
-        socket.emit('save_content', { 
-          roomId,
-          text: finalContent 
-        });
-      }
-    }
-  };
-}, [ydoc, isYjsSynced, isNameSet, roomId]);
+    return () => {
+      ytext.unobserve(observer);
+      debouncedSave.cancel();
+    };
+  }, [ydoc, isYjsSynced, roomId, backendUrl]);
+
+  // Remove the following useEffect as it's redundant and causes conflicts
+  /*
+  useEffect(() => {
+    const debouncedSaveToMongo = debounce((roomName, ydoc) => {
+      // ...
+    }, 2000);
+
+    ydoc.on('update', () => {
+      debouncedSaveToMongo(roomName, ydoc);
+    });
+  }, []);
+  */
+
   // Handle synchronization timeout
   useEffect(() => {
     if (loading) {
@@ -325,6 +254,7 @@ useEffect(() => {
       return () => clearTimeout(timer);
     }
   }, [loading]);
+
   // Handle Name Submission
   const handleNameSubmit = () => {
     if (userName.trim()) {
@@ -635,11 +565,9 @@ useEffect(() => {
             )}
           </div>
 
-
-        <div className={styles['refresh-note']}>
-          <p><strong>Note:</strong> If you believe there should be content in this room but see nothing, try refreshing the page a couple of times.</p>
-        </div>
-
+          <div className={styles['refresh-note']}>
+            <p><strong>Note:</strong> If you believe there should be content in this room but see nothing, try refreshing the page a couple of times.</p>
+          </div>
 
           <div className={`${styles['chat-box']} ${chatVisible ? styles['open'] : ''} ${styles[theme]}`}>
             <button onClick={toggleChatBox} className={styles['close-btn']} aria-label="Close Chat">
