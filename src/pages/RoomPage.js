@@ -47,6 +47,7 @@ function RoomPageContent() {
   const [loading, setLoading] = useState(isNameSet);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
+  const contentSyncedRef = useRef(false);
   const hasInitialSync = useRef(false);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
@@ -69,11 +70,11 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-  if (isNameSet) {
+ useEffect(() => {
+  if (isNameSet && ydoc) {
     setLoading(true);
     console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-
+  
     socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
       console.log('join_room response:', response);
       if (response.error) {
@@ -87,11 +88,10 @@ function RoomPageContent() {
         setMessages(response.messages);
         setIsEditable(response.isEditable);
         setIsCreator(response.isCreator);
-
-        // Only set initial content if Yjs document is empty
-        if (response.text && ydoc) {
+  
+        // Only set initial content if Yjs document is empty and we haven't synced yet
+        if (response.text && !hasInitialSync.current) {
           const ytext = ydoc.getText('shared-text');
-          // Check if the document is actually empty before setting content
           if (ytext.toString().trim() === '') {
             console.log('Setting initial content from MongoDB');
             ytext.delete(0, ytext.length);
@@ -185,9 +185,10 @@ function RoomPageContent() {
 useEffect(() => {
   if (ydoc && isYjsSynced && !hasInitialSync.current) {
     hasInitialSync.current = true;
+    contentSyncedRef.current = true;
     console.log('Yjs initial sync completed');
     
-    // Get the current content after sync
+    // Log the current content after sync
     const currentContent = ydoc.getText('shared-text').toString();
     console.log('Content after Yjs sync:', currentContent.substring(0, 100) + '...');
   }
@@ -210,7 +211,7 @@ useEffect(() => {
 
   // Handle Awareness State
 useEffect(() => {
-  if (!ydoc || !isYjsSynced || !isNameSet) return;
+  if (!ydoc || !isYjsSynced || !isNameSet || !contentSyncedRef.current) return;
 
   const ytext = ydoc.getText('shared-text');
   let lastSavedContent = ytext.toString();
@@ -234,9 +235,12 @@ useEffect(() => {
   }, 2000);
   
   const observer = () => {
-    const content = ytext.toString();
-    if (content !== null && content !== undefined) {
-      debouncedSave(content);
+    // Only save if we're fully synced
+    if (contentSyncedRef.current) {
+      const content = ytext.toString();
+      if (content !== null && content !== undefined) {
+        debouncedSave(content);
+      }
     }
   };
 
@@ -246,17 +250,18 @@ useEffect(() => {
     ytext.unobserve(observer);
     debouncedSave.cancel();
     
-    // Final save on unmount
-    const finalContent = ytext.toString();
-    if (finalContent.trim() && finalContent !== lastSavedContent) {
-      socket.emit('save_content', { 
-        roomId,
-        text: finalContent 
-      });
+    // Only save on unmount if we're fully synced
+    if (contentSyncedRef.current) {
+      const finalContent = ytext.toString();
+      if (finalContent.trim() && finalContent !== lastSavedContent) {
+        socket.emit('save_content', { 
+          roomId,
+          text: finalContent 
+        });
+      }
     }
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
-
   // Handle synchronization timeout
   useEffect(() => {
     if (loading) {
