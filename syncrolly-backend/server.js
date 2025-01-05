@@ -275,57 +275,58 @@ io.on('connection', async (socket) => {
 
   // Handle room joining
 socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
-  try {
-    let room = await roomsCollection.findOne({ roomId });
+    try {
+        let room = await roomsCollection.findOne({ roomId });
 
-    if (!room) {
-      if (isCreator) {
-        room = {
-          roomId,
-          text: '',
-          messages: [],
-          users: {},
-          theme: 'light',
-          lastActivity: new Date(),
-          creatorId: userId,
-          isEditable: true
-        };
-        await roomsCollection.insertOne(room);
-      } else {
-        return callback({ error: 'Room does not exist.' });
-      }
-    }
-
-      // Add user to room
-      room.users[userId] = userName;
-      await roomsCollection.updateOne(
-        { roomId },
-        { 
-          $set: {
-            users: room.users,
-            lastActivity: new Date()
-          }
+        if (!room) {
+            if (isCreator) {
+                room = {
+                    roomId,
+                    text: '',
+                    messages: [],
+                    users: {},
+                    theme: 'light',
+                    lastActivity: new Date(),
+                    creatorId: userId,
+                    isEditable: true,
+                };
+                await roomsCollection.insertOne(room);
+            } else {
+                return callback({ error: 'Room does not exist.' });
+            }
         }
-      );
 
-         socket.join(roomId);
-    socketUserMap.set(socket.id, { userId, roomId });
+        // Add user to room
+        room.users[userId] = userName;
+        await roomsCollection.updateOne(
+            { roomId },
+            {
+                $set: {
+                    users: room.users,
+                    lastActivity: new Date(),
+                },
+            }
+        );
 
-    // Don't send text content in the callback - let Yjs handle it
-    callback({
-      success: true,
-      messages: room.messages,
-      theme: room.theme,
-      files: await uploadsCollection.find({ roomId }).toArray(),
-      users: room.users,
-      isCreator: (room.creatorId === userId),
-      isEditable: room.isEditable
-    });
-  } catch (error) {
-    console.error('Error in join_room:', error);
-    callback({ error: 'Internal Server Error' });
-  }
+        socket.join(roomId);
+        socketUserMap.set(socket.id, { userId, roomId });
+
+        callback({
+            success: true,
+            text: room.text, // Include initial text content
+            messages: room.messages,
+            theme: room.theme,
+            files: await uploadsCollection.find({ roomId }).toArray(),
+            users: room.users,
+            isCreator: room.creatorId === userId,
+            isEditable: room.isEditable,
+        });
+    } catch (error) {
+        console.error('Error in join_room:', error);
+        callback({ error: 'Internal Server Error' });
+    }
 });
+
 
   // Handle toggle_editability
   socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
