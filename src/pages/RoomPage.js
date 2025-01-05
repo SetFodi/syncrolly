@@ -169,23 +169,33 @@ useEffect(() => {
 
     
 useEffect(() => {
-  if (ydoc && isYjsSynced && !hasInitialSync.current) {
-    hasInitialSync.current = true;
-    const ytext = ydoc.getText('shared-text');
-    
-    if (!ytext.toString().trim()) { // Check if Yjs document content is empty
-      console.log("Yjs content is empty. Fetching from MongoDB...");
-      socket.emit('fetch_content', { roomId }, (response) => {
-        if (response.success && response.text) {
-          ytext.insert(0, response.text); // Populate Yjs document with MongoDB content
-          console.log("Content loaded from MongoDB into Yjs.");
-        } else {
-          console.error("Failed to fetch content from MongoDB:", response.error || "Unknown error");
+    if (ydoc && !hasInitialSync.current) {
+        // Skip fetching if already synced
+        if (contentSyncedRef.current) {
+            return;
         }
-      });
+
+        hasInitialSync.current = true;
+
+        // Fetch content from MongoDB
+        console.log("Fetching content from MongoDB...");
+        socket.emit('fetch_content', { roomId }, (response) => {
+            if (response.success && response.text) {
+                const ytext = ydoc.getText('shared-text');
+                ytext.delete(0, ytext.length); // Clear existing Yjs content
+                ytext.insert(0, response.text); // Insert fetched content
+                contentSyncedRef.current = true; // Mark as synced
+                console.log("Content loaded into Yjs from MongoDB.");
+            } else {
+                console.error("Failed to fetch content from MongoDB:", response.error || "Unknown error");
+                contentSyncedRef.current = false;
+            }
+        });
     }
-  }
-}, [ydoc, isYjsSynced, roomId]);
+}, [ydoc, roomId]);
+
+
+
 
  // Add this to your RoomPageContent component
 useEffect(() => {
