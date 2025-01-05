@@ -74,7 +74,7 @@ useEffect(() => {
   if (isNameSet && ydoc) {
     setLoading(true);
     console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-  
+
     socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
       console.log('join_room response:', response);
       if (response.error) {
@@ -88,8 +88,8 @@ useEffect(() => {
         setMessages(response.messages);
         setIsEditable(response.isEditable);
         setIsCreator(response.isCreator);
-  
-        // Only the creator sets the initial content
+
+        // **Only the creator sets the initial content**
         if (response.text && isCreator && !hasInitialSync.current) {
           const ytext = ydoc.getText('shared-text');
           if (ytext.toString().trim() === '') {
@@ -98,7 +98,7 @@ useEffect(() => {
             ytext.insert(0, response.text);
           }
         }
-        
+
         setLoading(false);
       }
     });
@@ -149,18 +149,18 @@ useEffect(() => {
       });
 
       return () => {
-        socket.off('new_file');
-        socket.off('receive_message');
-        socket.off('user_typing');
-        socket.off('user_stopped_typing');
-        socket.off('editable_state_changed'); // Clean up the new listener
-        socket.off('theme_changed');
-        socket.off('room_deleted');
-        socket.off('room_joined');
-        socket.off('content_update')
-      };
-    }
-  }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
+      socket.off('new_file');
+      socket.off('receive_message');
+      socket.off('user_typing');
+      socket.off('user_stopped_typing');
+      socket.off('editable_state_changed');
+      socket.off('theme_changed');
+      socket.off('room_deleted');
+      socket.off('room_joined');
+      socket.off('content_update');
+    };
+  }
+}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
   // **Removed the useEffect that emits 'save_text_content' via Socket.IO to prevent duplication**
 
