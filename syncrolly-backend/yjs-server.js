@@ -43,33 +43,24 @@ const lastAccess = new Map();
 
 // Helper function to load document state
 async function loadDocument(roomName) {
-  try {
-    // First try to get existing doc from memory
-   const persistedYdoc = await ldb.getYDoc(roomName);
-    if (persistedYdoc) {
-      return persistedYdoc;
-    }
+    try {
+        const ydoc = await ldb.getYDoc(roomName); // Try to get the Yjs document from LevelDB.
 
-    // If no persisted state, create new document
-    const ydoc = new Y.Doc();
-    
-    // Try to get content from MongoDB
-const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
-    if (mongoDoc?.text) {
-      const ytext = ydoc.getText('shared-text');
-      // Only insert if the text is empty
-      if (ytext.toString().trim() === '') {
-        ytext.insert(0, mongoDoc.text);
-        console.log(`Loaded initial content from MongoDB for "${roomName}"`);
-      }
+        // Load content from MongoDB if Yjs is empty
+        if (ydoc.getText('shared-text').toString().trim() === '') {
+            const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+            if (mongoDoc?.text) {
+                ydoc.getText('shared-text').insert(0, mongoDoc.text);
+                console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
+            }
+        }
+        return ydoc;
+    } catch (err) {
+        console.error(`Error loading document "${roomName}":`, err);
+        throw err;
     }
-    
-    return ydoc;
-  } catch (err) {
-    console.error(`Error loading document "${roomName}":`, err);
-    throw err;
-  }
 }
+
 
 async function checkRoomExists(roomName) {
   if (!roomsCollection) return false;
@@ -119,27 +110,29 @@ async function syncToMongo(roomName, ydoc, retries = 3) {
 }
 
 async function cleanupDocument(roomName) {
-  try {
-    const docInfo = docsMap.get(roomName);
-    if (!docInfo) return;
+    try {
+        const docInfo = docsMap.get(roomName);
+        if (!docInfo) return;
 
-    const { ydoc } = docInfo;
-    const roomExists = await checkRoomExists(roomName);
-    if (roomExists) {
-      const update = Y.encodeStateAsUpdate(ydoc);
-      await Promise.all([
-        ldb.storeUpdate(roomName, update),
-        syncToMongo(roomName, ydoc),
-      ]);
+        const { ydoc } = docInfo;
+
+        const roomExists = await checkRoomExists(roomName);
+        if (roomExists) {
+            const update = Y.encodeStateAsUpdate(ydoc);
+            await Promise.all([
+                ldb.storeUpdate(roomName, update), // Save Yjs state to LevelDB.
+                syncToMongo(roomName, ydoc),      // Save content to MongoDB.
+            ]);
+        }
+
+        docsMap.delete(roomName);
+        lastAccess.delete(roomName);
+        console.log(`Cleaned up document "${roomName}" (removed from memory)`);
+    } catch (err) {
+        console.error(`Error cleaning up document "${roomName}":`, err);
     }
-
-    docsMap.delete(roomName);
-    lastAccess.delete(roomName);
-    console.log(`Cleaned up document "${roomName}" (removed from memory)`);
-  } catch (err) {
-    console.error(`Error cleaning up document "${roomName}":`, err);
-  }
 }
+
 
 const server = http.createServer((req, res) => {
   res.writeHead(200);
