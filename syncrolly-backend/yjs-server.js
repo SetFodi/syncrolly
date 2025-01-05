@@ -44,22 +44,31 @@ const lastAccess = new Map();
 // Helper function to load document state
 async function loadDocument(roomName) {
     try {
-        const ydoc = await ldb.getYDoc(roomName); // Try to get the Yjs document from LevelDB.
+        // Fetch from MongoDB first
+        const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+        const ydoc = new Y.Doc();
 
-        // Load content from MongoDB if Yjs is empty
-        if (ydoc.getText('shared-text').toString().trim() === '') {
-            const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
-            if (mongoDoc?.text) {
-                ydoc.getText('shared-text').insert(0, mongoDoc.text);
-                console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
+        if (mongoDoc?.text) {
+            ydoc.getText('shared-text').insert(0, mongoDoc.text);
+            console.log(`Loaded content from MongoDB for room: ${roomName}`);
+        } else {
+            // If no content in MongoDB, fallback to LevelDB
+            console.log(`No content in MongoDB for room: ${roomName}, checking LevelDB...`);
+            const levelDbDoc = await ldb.getYDoc(roomName);
+            const levelDbContent = levelDbDoc.getText('shared-text').toString();
+            if (levelDbContent.trim()) {
+                ydoc.getText('shared-text').insert(0, levelDbContent);
+                console.log(`Loaded content from LevelDB for room: ${roomName}`);
             }
         }
+
         return ydoc;
     } catch (err) {
         console.error(`Error loading document "${roomName}":`, err);
         throw err;
     }
 }
+
 
 
 async function checkRoomExists(roomName) {
