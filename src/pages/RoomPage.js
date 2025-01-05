@@ -70,7 +70,7 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
- useEffect(() => {
+useEffect(() => {
   if (isNameSet && ydoc) {
     setLoading(true);
     console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
@@ -89,15 +89,13 @@ function RoomPageContent() {
         setIsEditable(response.isEditable);
         setIsCreator(response.isCreator);
   
-        // Only set initial content if Yjs document is empty and we haven't synced yet
-        if (response.text && !hasInitialSync.current) {
+        // Only the creator sets the initial content
+        if (response.text && isCreator && !hasInitialSync.current) {
           const ytext = ydoc.getText('shared-text');
           if (ytext.toString().trim() === '') {
-            console.log('Setting initial content from MongoDB');
+            console.log('Setting initial content from MongoDB by creator');
             ytext.delete(0, ytext.length);
             ytext.insert(0, response.text);
-          } else {
-            console.log('Yjs document already has content, skipping initial content set');
           }
         }
         
@@ -155,7 +153,6 @@ function RoomPageContent() {
         socket.off('receive_message');
         socket.off('user_typing');
         socket.off('user_stopped_typing');
-        // Removed: socket.off('editor_mode_changed');
         socket.off('editable_state_changed'); // Clean up the new listener
         socket.off('theme_changed');
         socket.off('room_deleted');
