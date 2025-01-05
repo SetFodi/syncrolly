@@ -70,36 +70,41 @@ function RoomPageContent() {
 
   // Initialize Socket.IO Events
   useEffect(() => {
-    if (isNameSet) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-  
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-  
-          // Set initial content from MongoDB if it exists
-          if (response.text && ydoc) {
-            const ytext = ydoc.getText('shared-text');
-            if (ytext.toString() === '') {  // Only set if empty to avoid conflicts
-              ytext.delete(0, ytext.length);
-              ytext.insert(0, response.text);
-            }
+  if (isNameSet) {
+    setLoading(true);
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+
+    socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+      console.log('join_room response:', response);
+      if (response.error) {
+        alert(response.error);
+        setLoading(false);
+        return;
+      }
+      if (response.success) {
+        console.log('Joined room successfully:', response);
+        setFiles(response.files);
+        setMessages(response.messages);
+        setIsEditable(response.isEditable);
+        setIsCreator(response.isCreator);
+
+        // Only set initial content if Yjs document is empty
+        if (response.text && ydoc) {
+          const ytext = ydoc.getText('shared-text');
+          // Check if the document is actually empty before setting content
+          if (ytext.toString().trim() === '') {
+            console.log('Setting initial content from MongoDB');
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, response.text);
+          } else {
+            console.log('Yjs document already has content, skipping initial content set');
           }
-          
-          setLoading(false);
         }
-      });
+        
+        setLoading(false);
+      }
+    });
+
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -181,9 +186,12 @@ useEffect(() => {
   if (ydoc && isYjsSynced && !hasInitialSync.current) {
     hasInitialSync.current = true;
     console.log('Yjs initial sync completed');
+    
+    // Get the current content after sync
+    const currentContent = ydoc.getText('shared-text').toString();
+    console.log('Content after Yjs sync:', currentContent.substring(0, 100) + '...');
   }
 }, [ydoc, isYjsSynced]);
-
  // Add this to your RoomPageContent component
 useEffect(() => {
   return () => {
@@ -205,11 +213,13 @@ useEffect(() => {
   if (!ydoc || !isYjsSynced || !isNameSet) return;
 
   const ytext = ydoc.getText('shared-text');
+  let lastSavedContent = ytext.toString();
   
   const debouncedSave = debounce((content) => {
-    if (!content.trim()) return; // Don't save empty content
+    if (!content.trim() || content === lastSavedContent) return;
     
-    console.log('Attempting to save content to MongoDB:', content.substring(0, 100) + '...');
+    console.log('Saving new content to MongoDB:', content.substring(0, 100) + '...');
+    lastSavedContent = content;
     
     socket.emit('save_content', { 
       roomId,
@@ -232,17 +242,18 @@ useEffect(() => {
 
   ytext.observe(observer);
 
-  // Save on unmount to ensure final state is saved
   return () => {
     ytext.unobserve(observer);
+    debouncedSave.cancel();
+    
+    // Final save on unmount
     const finalContent = ytext.toString();
-    if (finalContent.trim()) {
+    if (finalContent.trim() && finalContent !== lastSavedContent) {
       socket.emit('save_content', { 
         roomId,
         text: finalContent 
       });
     }
-    debouncedSave.cancel();
   };
 }, [ydoc, isYjsSynced, isNameSet, roomId]);
 
