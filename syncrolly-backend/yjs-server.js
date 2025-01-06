@@ -75,10 +75,8 @@ async function checkRoomExists(roomName) {
 const syncToMongo = async (roomName, ydoc) => {
   try {
     const content = ydoc.getText('shared-text').toString();
-    
-    // Even if content is empty, we should still sync it
-    // Remove the early return for empty content
-    // if (!content.trim()) return;
+    console.log(`Attempting to sync document "${roomName}" with content length: ${content.length}`);
+    console.log('Content preview:', content.substring(0, 100));
 
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
@@ -86,19 +84,37 @@ const syncToMongo = async (roomName, ydoc) => {
       return;
     }
 
-    await roomsCollection.updateOne(
+    // Add explicit error handling for the MongoDB update
+    const result = await roomsCollection.updateOne(
       { roomId: roomName },
       { 
         $set: { 
           text: content, 
           lastActivity: new Date(),
-          lastSync: new Date() // Add a timestamp for the last successful sync
+          lastSync: new Date()
         } 
-      }
+      },
+      { upsert: false } // Ensure we're only updating existing documents
     );
-    console.log(`Successfully synced document "${roomName}" to MongoDB with ${content.length} characters`);
+
+    if (result.matchedCount === 0) {
+      console.error(`No document matched for room "${roomName}"`);
+      return;
+    }
+
+    if (result.modifiedCount === 0) {
+      console.log(`No changes made to room "${roomName}" (content might be the same)`);
+    } else {
+      console.log(`Successfully synced document "${roomName}" to MongoDB. ModifiedCount: ${result.modifiedCount}`);
+    }
+
+    // Verify the update
+    const verifyDoc = await roomsCollection.findOne({ roomId: roomName });
+    console.log(`Verification - Room "${roomName}" text length in MongoDB: ${verifyDoc?.text?.length || 0}`);
+
   } catch (error) {
     console.error(`Error syncing "${roomName}" to MongoDB:`, error);
+    throw error; // Rethrow to handle it in the calling function
   }
 };
 
@@ -157,7 +173,7 @@ wss.on('connection', async (conn, request) => {
     lastAccess.set(roomName, Date.now());
 
     // Initialize or retrieve document
-    let docInfo = docsMap.get(roomName);
+   let docInfo = docsMap.get(roomName);
     if (!docInfo) {
       const ydoc = await loadDocument(roomName);
       const awareness = new Awareness(ydoc);
@@ -165,22 +181,42 @@ wss.on('connection', async (conn, request) => {
       docInfo = { ydoc, awareness };
       
       // Set up more aggressive initial sync
-      ydoc.on('update', (update, origin) => {
-        lastAccess.set(roomName, Date.now());
-        debouncedSyncToMongo(roomName, ydoc);
+      ydoc.on('update', async (update, origin) => {
+        try {
+          lastAccess.set(roomName, Date.now());
+          // Cancel any pending debounced sync
+          if (docInfo.debouncedSync) {
+            docInfo.debouncedSync.cancel();
+          }
+         if (!docInfo.debouncedSync) {
+            docInfo.debouncedSync = debounce(async () => {
+              try {
+                await syncToMongo(roomName, ydoc);
+              } catch (error) {
+                console.error(`Failed to sync "${roomName}":`, error);
+              }
+            }, 1000);
+          } 
         
         // Force an immediate sync for the first update
         if (!docInfo.hadFirstSync) {
-          syncToMongo(roomName, ydoc);
-          docInfo.hadFirstSync = true;
+            await syncToMongo(roomName, ydoc);
+            docInfo.hadFirstSync = true;
+          }
+        } catch (error) {
+          console.error(`Error handling update for "${roomName}":`, error);
         }
       });
     }
 
-    const { ydoc, awareness } = docInfo;
+       const { ydoc, awareness } = docInfo;
 
     // Force a sync when connection is established
-    await syncToMongo(roomName, ydoc);
+    try {
+      await syncToMongo(roomName, ydoc);
+    } catch (error) {
+      console.error(`Failed initial sync for "${roomName}":`, error);
+    }
 
     // Set up persistence interval
     const intervalId = setInterval(async () => {
