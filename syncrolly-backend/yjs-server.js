@@ -75,7 +75,10 @@ async function checkRoomExists(roomName) {
 const syncToMongo = async (roomName, ydoc) => {
   try {
     const content = ydoc.getText('shared-text').toString();
-    if (!content.trim()) return;
+    
+    // Even if content is empty, we should still sync it
+    // Remove the early return for empty content
+    // if (!content.trim()) return;
 
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
@@ -85,15 +88,22 @@ const syncToMongo = async (roomName, ydoc) => {
 
     await roomsCollection.updateOne(
       { roomId: roomName },
-      { $set: { text: content, lastActivity: new Date() } }
+      { 
+        $set: { 
+          text: content, 
+          lastActivity: new Date(),
+          lastSync: new Date() // Add a timestamp for the last successful sync
+        } 
+      }
     );
-    console.log(`Successfully synced document "${roomName}" to MongoDB`);
+    console.log(`Successfully synced document "${roomName}" to MongoDB with ${content.length} characters`);
   } catch (error) {
     console.error(`Error syncing "${roomName}" to MongoDB:`, error);
   }
 };
 
-const debouncedSyncToMongo = debounce(syncToMongo, 2000);
+// Reduce the debounce time to ensure more frequent saves
+const debouncedSyncToMongo = debounce(syncToMongo, 1000); 
 
 
 
@@ -153,12 +163,24 @@ wss.on('connection', async (conn, request) => {
       const awareness = new Awareness(ydoc);
       docsMap.set(roomName, { ydoc, awareness });
       docInfo = { ydoc, awareness };
-       ydoc.on('update', () => {
-                debouncedSyncToMongo(roomName, ydoc);
-            });
+      
+      // Set up more aggressive initial sync
+      ydoc.on('update', (update, origin) => {
+        lastAccess.set(roomName, Date.now());
+        debouncedSyncToMongo(roomName, ydoc);
+        
+        // Force an immediate sync for the first update
+        if (!docInfo.hadFirstSync) {
+          syncToMongo(roomName, ydoc);
+          docInfo.hadFirstSync = true;
+        }
+      });
     }
 
     const { ydoc, awareness } = docInfo;
+
+    // Force a sync when connection is established
+    await syncToMongo(roomName, ydoc);
 
     // Set up persistence interval
     const intervalId = setInterval(async () => {
