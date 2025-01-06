@@ -134,10 +134,10 @@ wss.on('connection', async (conn, request) => {
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'default-room';
 
   try {
-    // Ensure room exists in Mongo
+    // Ensure room exists in MongoDB
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
-      console.log(`Room "${roomName}" not found in Mongo; closing connection`);
+      console.log(`Room "${roomName}" not found in MongoDB; closing connection`);
       conn.close();
       return;
     }
@@ -147,18 +147,19 @@ wss.on('connection', async (conn, request) => {
 
     // Initialize or retrieve document
     let docInfo = docsMap.get(roomName);
-if (!docsMap.has(roomName)) {
-  const ydoc = await loadDocument(roomName);
-  const awareness = new Awareness(ydoc);
-  docsMap.set(roomName, { ydoc, awareness });
+    if (!docInfo) {
+      const ydoc = await loadDocument(roomName);
+      const awareness = new Awareness(ydoc);
+      docInfo = { ydoc, awareness };
+      docsMap.set(roomName, docInfo);
 
-  // Attach update listener
-  ydoc.on('update', () => {
-    debouncedSyncToMongo(roomName, ydoc);
-  });
-}
+      // Attach update listener
+      ydoc.on('update', () => {
+        debouncedSyncToMongo(roomName, ydoc);
+      });
+    }
 
-
+    // Safely destructure ydoc and awareness now
     const { ydoc, awareness } = docInfo;
 
     // Set up persistence interval
@@ -216,6 +217,19 @@ if (!docsMap.has(roomName)) {
         console.error(`Error during final save for "${roomName}":`, err);
       }
     });
+
+    // Set up WebSocket connection
+    setupWSConnection(conn, request, {
+      docName: roomName,
+      gc: false,
+      awareness,
+    });
+  } catch (err) {
+    console.error(`Error handling connection for room "${roomName}":`, err);
+    conn.close();
+  }
+});
+
 
     // Set up WebSocket connection
     setupWSConnection(conn, request, {
