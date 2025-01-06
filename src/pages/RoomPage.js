@@ -86,19 +86,51 @@ useEffect(() => {
         if (response.ok) {
           const data = await response.json();
           if (data.text) {
-            console.log('Fetched initial content from MongoDB');
+            console.log('Fetched initial content from MongoDB:', data.text.substring(0, 100));
             const ytext = ydoc.getText('shared-text');
             ytext.delete(0, ytext.length);
             ytext.insert(0, data.text);
-            contentSyncedRef.current = true; // Mark as synced
+            contentSyncedRef.current = true;
+          } else {
+            console.log('No initial content in MongoDB');
+            contentSyncedRef.current = true; // Mark as synced even if empty
           }
         }
       } catch (error) {
         console.error('Error fetching initial content:', error);
+        contentSyncedRef.current = true; // Mark as synced even on error to prevent blocking
       }
     };
 
-    // Fetch content before joining room
+    // Set up content syncing using Yjs observer
+    let lastSavedContent = '';
+    const ytext = ydoc.getText('shared-text');
+    
+    const debouncedSave = debounce(async (content) => {
+      if (content === lastSavedContent) return;
+      
+      console.log('Syncing content to MongoDB:', content.substring(0, 100));
+      lastSavedContent = content;
+      
+      socket.emit('save_content', { roomId, text: content }, (response) => {
+        if (!response?.success) {
+          console.error('Failed to sync content:', response?.error);
+        } else {
+          console.log('Content successfully synced to MongoDB');
+        }
+      });
+    }, 1000);
+
+    const observer = () => {
+      if (!contentSyncedRef.current) return; // Don't sync until initial content is loaded
+      const content = ytext.toString();
+      debouncedSave(content);
+    };
+
+    // Set up the observer for content changes
+    ytext.observe(observer);
+
+    // Fetch content and then join room
     fetchInitialContent().then(() => {
       socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
         console.log('join_room response:', response);
@@ -117,74 +149,66 @@ useEffect(() => {
         }
       });
     });
-    
-    const syncInterval = setInterval(() => {
-      const content = ydoc.getText('shared-text').toString();
-      socket.emit('save_content', { roomId, text: content }, (response) => {
-        if (!response?.success) {
-          console.error('Failed to sync content:', response?.error);
+
+    // Listen for editability changes
+    socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
+      console.log(`Editability changed to: ${newIsEditable}`);
+      setIsEditable(newIsEditable);
+    });
+
+    // Listen for new messages
+    socket.on('receive_message', (message) => {
+      console.log('Received message:', message);
+      setMessages((prevMessages) => [...prevMessages, message]);
+      if (!chatVisible) {
+        setHasUnreadMessages(true);
+      }
+    });
+
+    // Listen for typing indicators
+    socket.on('user_typing', ({ userId, userName }) => {
+      console.log(`${userName} is typing...`);
+      setTypingUsers((prevTypingUsers) => {
+        if (!prevTypingUsers.some(user => user.userId === userId)) {
+          return [...prevTypingUsers, { userId, userName }];
         }
+        return prevTypingUsers;
       });
-    }, 5000); // Sync every 5 seconds
+    });
 
-      // Listen for editability changes
-      socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
-        console.log(`Editability changed to: ${newIsEditable}`);
-        setIsEditable(newIsEditable);
-      });
+    socket.on('user_stopped_typing', ({ userId }) => {
+      console.log(`User ${userId} stopped typing.`);
+      setTypingUsers((prevTypingUsers) => 
+        prevTypingUsers.filter(user => user.userId !== userId)
+      );
+    });
 
-      // Listen for new messages
-      socket.on('receive_message', (message) => {
-        console.log('Received message:', message);
-        setMessages((prevMessages) => [...prevMessages, message]);
+    socket.on('room_deleted', ({ message, deleteAfter }) => {
+      if (deleteAfter && new Date() > new Date(deleteAfter)) {
+        alert(message);
+        ytext.delete(0, ytext.length);
+        navigate('/');
+      } else {
+        alert(message);
+      }
+    });
 
-        // If chat is not visible, set unread messages flag
-        if (!chatVisible) {
-          setHasUnreadMessages(true);
-        }
-      });
-
-      // Listen for typing indicators
-      socket.on('user_typing', ({ userId, userName }) => {
-        console.log(`${userName} is typing...`);
-        setTypingUsers((prevTypingUsers) => {
-          if (!prevTypingUsers.some(user => user.userId === userId)) {
-            return [...prevTypingUsers, { userId, userName }];
-          }
-          return prevTypingUsers;
-        });
-      });
-
-      socket.on('user_stopped_typing', ({ userId }) => {
-        console.log(`User ${userId} stopped typing.`);
-        setTypingUsers((prevTypingUsers) => prevTypingUsers.filter(user => user.userId !== userId));
-      });
-
-      socket.on('room_deleted', ({ message, deleteAfter }) => {
-        if (deleteAfter && new Date() > new Date(deleteAfter)) {
-          alert(message);
-          // Clear the content to sync with the deletion
-          ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
-          navigate('/');
-        } else {
-          alert(message);
-        }
-      });
-
-      return () => {
-        clearInterval(syncInterval);
-        socket.off('new_file');
-        socket.off('receive_message');
-        socket.off('user_typing');
-        socket.off('user_stopped_typing');
-        socket.off('editable_state_changed');
-        socket.off('theme_changed');
-        socket.off('room_deleted');
-        socket.off('room_joined');
-        socket.off('content_update');
-      };
-    }
-  }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
+    // Cleanup function
+    return () => {
+      ytext.unobserve(observer);
+      debouncedSave.cancel();
+      socket.off('new_file');
+      socket.off('receive_message');
+      socket.off('user_typing');
+      socket.off('user_stopped_typing');
+      socket.off('editable_state_changed');
+      socket.off('theme_changed');
+      socket.off('room_deleted');
+      socket.off('room_joined');
+      socket.off('content_update');
+    };
+  }
+}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc, backendUrl]);
 
   // Handle room joined event
   useEffect(() => {
@@ -200,59 +224,6 @@ useEffect(() => {
     };
   }, [ydoc, roomId]);
 
-
-  // 2. Handle Yjs document updates and save to backend
-  useEffect(() => {
-    if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
-
-    const ytext = ydoc.getText('shared-text');
-    let lastSavedContent = ytext.toString();
-
-    const debouncedSave = debounce(async (content) => {
-      if (!content.trim() || content === lastSavedContent) return;
-
-      console.log('Saving updated content to MongoDB:', content.substring(0, 100));
-      lastSavedContent = content;
-
-      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content }),
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        console.log('Content successfully saved to MongoDB');
-      } else {
-        console.error('Failed to save content to MongoDB');
-      }
-    }, 2000);
-
-    const observer = () => {
-      const content = ytext.toString();
-      debouncedSave(content);
-    };
-
-    ytext.observe(observer);
-
-    return () => {
-      ytext.unobserve(observer);
-      debouncedSave.cancel();
-    };
-  }, [ydoc, isYjsSynced, roomId, backendUrl]);
-
-  // Remove the following useEffect as it's redundant and causes conflicts
-  /*
-  useEffect(() => {
-    const debouncedSaveToMongo = debounce((roomName, ydoc) => {
-      // ...
-    }, 2000);
-
-    ydoc.on('update', () => {
-      debouncedSaveToMongo(roomName, ydoc);
-    });
-  }, []);
-  */
 
   // Handle synchronization timeout
   useEffect(() => {
