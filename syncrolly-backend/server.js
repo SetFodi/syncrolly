@@ -355,65 +355,67 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
 
         if (!room) {
             if (isCreator) {
-                // Initialize the room with empty content
+                // Create room document first
                 room = {
                     roomId,
                     text: '', // Initialize with empty text
                     messages: [],
-                    users: {},
+                    users: { [userId]: userName }, // Initialize with the creator
                     theme: 'light',
                     lastActivity: new Date(),
                     creatorId: userId,
                     isEditable: true,
                 };
-                await roomsCollection.insertOne(room);
 
-                // Force an immediate content save if there's initial content
-                const content = ""; // Start with empty content
-                await roomsCollection.updateOne(
-                    { roomId },
-                    { 
-                        $set: { 
-                            text: content,
-                            lastActivity: new Date()
-                        }
-                    }
-                );
+                // Insert the room first
+                const result = await roomsCollection.insertOne(room);
+                
+                if (!result.insertedId) {
+                    throw new Error('Failed to create room');
+                }
+
+                console.log(`Created new room "${roomId}" with creator "${userName}"`);
             } else {
                 return callback({ error: 'Room does not exist.' });
             }
-        }
-
-        // Add user to room in a separate update to avoid race conditions
-        await roomsCollection.updateOne(
-            { roomId },
-            {
-                $set: {
-                    [`users.${userId}`]: userName,
-                    lastActivity: new Date(),
+        } else {
+            // Update existing room's users
+            room.users[userId] = userName;
+            await roomsCollection.updateOne(
+                { roomId },
+                {
+                    $set: {
+                        users: room.users,
+                        lastActivity: new Date(),
+                    }
                 }
-            }
-        );
+            );
+        }
 
         socket.join(roomId);
         socketUserMap.set(socket.id, { userId, roomId });
 
-        // Get the latest room state after all updates
+        // Get fresh room data
         const updatedRoom = await roomsCollection.findOne({ roomId });
+        if (!updatedRoom) {
+            throw new Error('Room not found after creation/update');
+        }
 
         callback({
             success: true,
-            text: updatedRoom.text || '', // Send the latest text
-            messages: updatedRoom.messages,
-            theme: updatedRoom.theme,
+            text: updatedRoom.text || '',
+            messages: updatedRoom.messages || [],
+            theme: updatedRoom.theme || 'light',
             files: await uploadsCollection.find({ roomId }).toArray(),
             users: updatedRoom.users,
             isCreator: updatedRoom.creatorId === userId,
             isEditable: updatedRoom.isEditable,
         });
+
+        console.log(`User "${userName}" joined room "${roomId}"`);
     } catch (error) {
         console.error('Error in join_room:', error);
-        callback({ error: 'Internal Server Error' });
+        callback({ error: 'Internal Server Error: ' + error.message });
     }
 });
 
