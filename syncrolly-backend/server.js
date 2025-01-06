@@ -360,33 +360,45 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
                     roomId,
                     text: '', // Initialize with empty text
                     messages: [],
-                    users: { [userId]: userName }, // Initialize with the creator
+                    users: { [userId]: userName },
                     theme: 'light',
                     lastActivity: new Date(),
                     creatorId: userId,
                     isEditable: true,
+                    contentInitialized: true, // Add this flag
                 };
 
-                // Insert the room first
                 const result = await roomsCollection.insertOne(room);
-                
                 if (!result.insertedId) {
                     throw new Error('Failed to create room');
                 }
+
+                // Force an immediate sync after room creation
+                await roomsCollection.updateOne(
+                    { roomId },
+                    { 
+                        $set: { 
+                            text: '',
+                            lastActivity: new Date(),
+                            lastSync: new Date()
+                        } 
+                    }
+                );
 
                 console.log(`Created new room "${roomId}" with creator "${userName}"`);
             } else {
                 return callback({ error: 'Room does not exist.' });
             }
-        } else {
-            // Update existing room's users
-            room.users[userId] = userName;
+        }
+
+        // Skip sync if content is already initialized
+        if (!room.contentInitialized) {
             await roomsCollection.updateOne(
                 { roomId },
                 {
                     $set: {
-                        users: room.users,
-                        lastActivity: new Date(),
+                        contentInitialized: true,
+                        lastActivity: new Date()
                     }
                 }
             );
