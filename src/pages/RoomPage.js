@@ -75,46 +75,13 @@ useEffect(() => {
     setLoading(true);
     console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-    // First, fetch the content from MongoDB
-    const fetchInitialContent = async () => {
-      try {
-        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.text) {
-            console.log('Fetched initial content from MongoDB:', data.text.substring(0, 100));
-            // Clear existing content first
-            const ytext = ydoc.getText('shared-text');
-            ytext.delete(0, ytext.length);
-            // Only insert if there's actually content
-            if (data.text.trim()) {
-              ytext.insert(0, data.text);
-            }
-            contentSyncedRef.current = true;
-          } else {
-            console.log('No initial content in MongoDB');
-            // Ensure Yjs document is empty
-            const ytext = ydoc.getText('shared-text');
-            ytext.delete(0, ytext.length);
-            contentSyncedRef.current = true;
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching initial content:', error);
-        contentSyncedRef.current = true;
-      }
-    };
+    let isInitialized = false;
+    const ytext = ydoc.getText('shared-text');
 
     // Set up content syncing using Yjs observer
     let lastSavedContent = '';
-    const ytext = ydoc.getText('shared-text');
-    
     const debouncedSave = debounce(async (content) => {
-      if (content === lastSavedContent) return;
+      if (!isInitialized || content === lastSavedContent) return;
       
       lastSavedContent = content;
       console.log('Syncing content to MongoDB:', content.substring(0, 100));
@@ -128,35 +95,59 @@ useEffect(() => {
       });
     }, 1000);
 
-    // Set up content observer
-    const observer = () => {
-      if (!contentSyncedRef.current) return; // Don't sync until initial content is loaded
-      const content = ytext.toString();
-      debouncedSave(content);
+    // Initialize room and content
+    const initialize = async () => {
+      try {
+        // First fetch MongoDB content
+        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          // Clear any existing content
+          ytext.delete(0, ytext.length);
+          if (data.text?.trim()) {
+            ytext.insert(0, data.text);
+          }
+        }
+
+        // Then join room
+        socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+          if (response.error) {
+            alert(response.error);
+            setLoading(false);
+            return;
+          }
+          if (response.success) {
+            console.log('Joined room successfully:', response);
+            setFiles(response.files);
+            setMessages(response.messages);
+            setIsEditable(response.isEditable);
+            setIsCreator(response.isCreator);
+            setLoading(false);
+            isInitialized = true; // Mark as initialized only after successful join
+          }
+        });
+      } catch (error) {
+        console.error('Error during initialization:', error);
+        setLoading(false);
+      }
     };
 
     // Set up the observer for content changes
+    const observer = () => {
+      const content = ytext.toString();
+      if (isInitialized) {
+        debouncedSave(content);
+      }
+    };
+
     ytext.observe(observer);
 
-    // Fetch content and then join room
-    fetchInitialContent().then(() => {
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          setLoading(false);
-        }
-      });
-    });
+    // Start initialization
+    initialize();
 
     // Set up socket event listeners
     socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
