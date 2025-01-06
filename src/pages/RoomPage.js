@@ -128,15 +128,7 @@ useEffect(() => {
       });
     }, 1000);
 
-    // Fetch content before setting up observers to avoid duplicate content
-    fetchInitialContent().then(() => {
-      // Set up the observer for content changes
-      ytext.observe(() => {
-        if (!contentSyncedRef.current) return;
-        const content = ytext.toString();
-        debouncedSave(content);
-      });
-
+    // Set up content observer
     const observer = () => {
       if (!contentSyncedRef.current) return; // Don't sync until initial content is loaded
       const content = ytext.toString();
@@ -166,13 +158,12 @@ useEffect(() => {
       });
     });
 
-    // Listen for editability changes
+    // Set up socket event listeners
     socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
       console.log(`Editability changed to: ${newIsEditable}`);
       setIsEditable(newIsEditable);
     });
 
-    // Listen for new messages
     socket.on('receive_message', (message) => {
       console.log('Received message:', message);
       setMessages((prevMessages) => [...prevMessages, message]);
@@ -181,7 +172,6 @@ useEffect(() => {
       }
     });
 
-    // Listen for typing indicators
     socket.on('user_typing', ({ userId, userName }) => {
       console.log(`${userName} is typing...`);
       setTypingUsers((prevTypingUsers) => {
