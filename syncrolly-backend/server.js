@@ -239,9 +239,19 @@ app.post('/room/:roomId/content', async (req, res) => {
 
 
 // The function `saveContentToMongo` should store `text` in MongoDB
+// Replace your existing saveContentToMongo function with this
 async function saveContentToMongo(roomId, text) {
   try {
-    await roomsCollection.updateOne(
+    console.log(`[saveContentToMongo] Attempting to save content for room ${roomId}, length: ${text?.length || 0}`);
+    
+    // First verify the room exists
+    const room = await roomsCollection.findOne({ roomId });
+    if (!room) {
+      console.error(`[saveContentToMongo] No room found with ID ${roomId}`);
+      return false;
+    }
+
+    const result = await roomsCollection.updateOne(
       { roomId },
       { 
         $set: { 
@@ -249,11 +259,22 @@ async function saveContentToMongo(roomId, text) {
           lastActivity: new Date(),
         }
       },
-      { upsert: true }
+      { upsert: false }
     );
-    console.log(`Text saved for room ${roomId} in MongoDB`);
+
+    if (result.matchedCount === 0) {
+      console.error(`[saveContentToMongo] No document matched for room ${roomId}`);
+      return false;
+    }
+
+    // Verify the update
+    const verifyDoc = await roomsCollection.findOne({ roomId });
+    console.log(`[saveContentToMongo] Verification - Room ${roomId} text length: ${verifyDoc?.text?.length || 0}`);
+    
+    return true;
   } catch (error) {
-    console.error('Error saving content to MongoDB:', error);
+    console.error('[saveContentToMongo] Error saving content:', error);
+    return false;
   }
 }
 
@@ -273,30 +294,59 @@ io.on('connection', async (socket) => {
   const totalConnectedUsers = await activeUsersCollection.countDocuments();
   io.emit('status_update', { totalConnectedUsers });
 
-  socket.on('save_content', async ({ roomId, text }, callback) => {
-    try {
-      await roomsCollection.updateOne(
-        { roomId },
-        { 
-          $set: {
-            text,
-            lastActivity: new Date()
-          }
-        },
-        { upsert: true }
-      );
-      console.log(`Content saved to MongoDB for room ${roomId}:`, text.substring(0, 100) + '...');
-      
-      if (callback) {
-        callback({ success: true });
-      }
-    } catch (error) {
-      console.error('Error saving content to MongoDB:', error);
-      if (callback) {
-        callback({ success: false, error: error.message });
-      }
+ socket.on('save_content', async ({ roomId, text }, callback) => {
+  try {
+    console.log(`Attempting to save content for room ${roomId}, content length: ${text?.length || 0}`);
+    console.log('Content preview:', text?.substring(0, 100));
+
+    // First verify the room exists
+    const room = await roomsCollection.findOne({ roomId });
+    if (!room) {
+      console.error(`No room found with ID ${roomId}`);
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
     }
-  });
+
+    const result = await roomsCollection.updateOne(
+      { roomId },
+      { 
+        $set: {
+          text,
+          lastActivity: new Date()
+        }
+      },
+      { upsert: false } // Don't create new rooms, only update existing ones
+    );
+
+    if (result.matchedCount === 0) {
+      console.error(`No document matched for room ${roomId}`);
+      if (callback) callback({ success: false, error: 'Room not found' });
+      return;
+    }
+
+    if (result.modifiedCount === 0) {
+      console.log(`No changes made to room ${roomId} (content might be the same)`);
+    } else {
+      console.log(`Content updated for room ${roomId}. ModifiedCount: ${result.modifiedCount}`);
+    }
+
+    // Verify the update
+    const verifyDoc = await roomsCollection.findOne({ roomId });
+    console.log(`Verification - Room ${roomId} text length in MongoDB: ${verifyDoc?.text?.length || 0}`);
+    
+    if (callback) {
+      callback({ 
+        success: true,
+        contentLength: verifyDoc?.text?.length || 0
+      });
+    }
+  } catch (error) {
+    console.error('Error saving content to MongoDB:', error);
+    if (callback) {
+      callback({ success: false, error: error.message });
+    }
+  }
+});
 
   // Handle room joining
 socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback) => {
