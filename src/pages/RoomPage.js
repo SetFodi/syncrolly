@@ -44,10 +44,11 @@ function RoomPageContent() {
   const [files, setFiles] = useState([]);
   const [fileInput, setFileInput] = useState(null);
   const [isEditable, setIsEditable] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loading, setLoading] = useState(isNameSet);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
-  const contentSyncedRef = useRef(false);
+  const [contentSynced, setContentSynced] = useState(false);
   const hasInitialSync = useRef(false);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
@@ -151,18 +152,35 @@ function RoomPageContent() {
   }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
   // Handle room joined event
-  useEffect(() => {
-    const handleRoomJoined = (roomData) => {
-      console.log('Room data:', roomData);
-      // Do not set content here, as it's now handled by Yjs WebSocket server
-    };
+useEffect(() => {
+  const handleRoomJoined = async (roomData) => {
+    console.log('Room data:', roomData);
 
-    socket.on('room_joined', handleRoomJoined);
+    try {
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
 
-    return () => {
-      socket.off('room_joined');
-    };
-  }, [ydoc, roomId]);
+      if (response.ok && data.text && ydoc) {
+        console.log('Fetched initial content from backend:', data.text.substring(0, 100));
+        const ytext = ydoc.getText('shared-text');
+        ytext.delete(0, ytext.length); // Clear existing content
+        ytext.insert(0, data.text);   // Load content from backend
+        setContentSynced(true);        // Mark content as synced
+      }
+    } catch (error) {
+      console.error('Error fetching initial content:', error);
+    }
+  };
+
+  socket.on('room_joined', handleRoomJoined);
+
+  return () => {
+    socket.off('room_joined');
+  };
+}, [ydoc, roomId, backendUrl]);
 
   // 1. Fetch and load initial content from backend into Yjs
   useEffect(() => {
@@ -224,10 +242,12 @@ if (response.ok && data.text && ydoc) {
       }
     }, 2000);
 
-    const observer = () => {
-      const content = ytext.toString();
-      debouncedSave(content);
-    };
+  const observer = () => {
+    const content = ytext.toString();
+    debouncedSave(content);
+    setLoading(false); // Update loading state once content is saved
+  };
+
 
     ytext.observe(observer);
 
