@@ -73,27 +73,26 @@ async function checkRoomExists(roomName) {
 
 
 const syncToMongo = async (roomName, ydoc) => {
-  try {
-    const content = ydoc.getText('shared-text').toString();
-    if (!content.trim()) return;
+  const content = ydoc.getText('shared-text').toString();
+  if (!content.trim()) return; // Skip empty updates
+  const roomExists = await checkRoomExists(roomName);
+  if (!roomExists) return;
 
-    const roomExists = await checkRoomExists(roomName);
-    if (!roomExists) {
-      console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
-      return;
-    }
-
-    await roomsCollection.updateOne(
-      { roomId: roomName },
-      { $set: { text: content, lastActivity: new Date() } }
-    );
-    console.log(`Successfully synced document "${roomName}" to MongoDB`);
-  } catch (error) {
-    console.error(`Error syncing "${roomName}" to MongoDB:`, error);
+  const existingRoom = await roomsCollection.findOne({ roomId: roomName });
+  if (existingRoom.text === content) {
+    console.log(`No changes to save for room: ${roomName}`);
+    return; // Avoid duplicate updates
   }
+
+  await roomsCollection.updateOne(
+    { roomId: roomName },
+    { $set: { text: content, lastActivity: new Date() } }
+  );
+  console.log(`Synced room "${roomName}" to MongoDB`);
 };
 
-const debouncedSyncToMongo = debounce(syncToMongo, 2000);
+const debouncedSyncToMongo = debounce(syncToMongo, 1000); // Reduce delay
+
 
 
 
@@ -148,15 +147,17 @@ wss.on('connection', async (conn, request) => {
 
     // Initialize or retrieve document
     let docInfo = docsMap.get(roomName);
-    if (!docInfo) {
-      const ydoc = await loadDocument(roomName);
-      const awareness = new Awareness(ydoc);
-      docsMap.set(roomName, { ydoc, awareness });
-      docInfo = { ydoc, awareness };
-       ydoc.on('update', () => {
-                debouncedSyncToMongo(roomName, ydoc);
-            });
-    }
+if (!docsMap.has(roomName)) {
+  const ydoc = await loadDocument(roomName);
+  const awareness = new Awareness(ydoc);
+  docsMap.set(roomName, { ydoc, awareness });
+
+  // Attach update listener
+  ydoc.on('update', () => {
+    debouncedSyncToMongo(roomName, ydoc);
+  });
+}
+
 
     const { ydoc, awareness } = docInfo;
 
