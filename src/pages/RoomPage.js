@@ -183,80 +183,63 @@ useEffect(() => {
 }, [ydoc, roomId, backendUrl]);
 
   // 1. Fetch and load initial content from backend into Yjs
-  useEffect(() => {
-    const fetchInitialContent = async () => {
-      try {
-        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        const data = await response.json();
+useEffect(() => {
+  const fetchInitialContent = async () => {
+    try {
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const data = await response.json();
 
-if (response.ok && data.text && ydoc) {
-  console.log('Fetched initial content from backend:', data.text.substring(0, 100));
-  const ytext = ydoc.getText('shared-text');
-
-  // Compare MongoDB content with Yjs document
-  if (ytext.toString() !== data.text) {
-    ytext.delete(0, ytext.length); // Clear existing content
-    ytext.insert(0, data.text);   // Load content from backend
-    console.log('Updated Yjs document with backend content');
-  }
-
-  contentSyncedRef.current = true; // Mark as synced
-}
-      } catch (error) {
-        console.error('Error fetching initial content:', error);
+      if (response.ok && data.text) {
+        const ytext = ydoc.getText('shared-text');
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, data.text);
+        console.log('Initial content loaded from MongoDB');
       }
-    };
-
-    if (ydoc && isYjsSynced && !contentSyncedRef.current) {
-      fetchInitialContent();
+    } catch (error) {
+      console.error('Error fetching initial content:', error);
     }
-  }, [ydoc, isYjsSynced, roomId, backendUrl]);
+  };
+
+  if (ydoc && roomId) {
+    fetchInitialContent();
+  }
+}, [ydoc, roomId, backendUrl]);
 
   // 2. Handle Yjs document updates and save to backend
   useEffect(() => {
-    if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
+  if (!ydoc) return;
 
-    const ytext = ydoc.getText('shared-text');
-    let lastSavedContent = ytext.toString();
+  const ytext = ydoc.getText('shared-text');
 
-    const debouncedSave = debounce(async (content) => {
-      if (!content.trim() || content === lastSavedContent) return;
-
-      console.log('Saving updated content to MongoDB:', content.substring(0, 100));
-      lastSavedContent = content;
-
-      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+  const debouncedSave = debounce(async (content) => {
+    try {
+      await fetch(`${backendUrl}/room/${roomId}/content`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: content }),
         credentials: 'include',
       });
-
-      if (response.ok) {
-        console.log('Content successfully saved to MongoDB');
-      } else {
-        console.error('Failed to save content to MongoDB');
-      }
-    }, 2000);
+      console.log('Content saved to MongoDB');
+    } catch (error) {
+      console.error('Failed to save content to MongoDB:', error);
+    }
+  }, 2000);
 
   const observer = () => {
     const content = ytext.toString();
     debouncedSave(content);
-    setLoading(false); // Update loading state once content is saved
   };
 
+  ytext.observe(observer);
 
-    ytext.observe(observer);
-
-    return () => {
-      ytext.unobserve(observer);
-      debouncedSave.cancel();
-    };
-  }, [ydoc, isYjsSynced, roomId, backendUrl]);
-
+  return () => {
+    ytext.unobserve(observer);
+    debouncedSave.cancel();
+  };
+}, [ydoc, roomId, backendUrl]);
   // Remove the following useEffect as it's redundant and causes conflicts
   /*
   useEffect(() => {
