@@ -70,142 +70,85 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-useEffect(() => {
-  if (isNameSet && ydoc) {
-    setLoading(true);
-    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+  useEffect(() => {
+    if (isNameSet && ydoc) {
+      setLoading(true);
+      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-    let isInitialized = false;
-    const ytext = ydoc.getText('shared-text');
+      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+        console.log('join_room response:', response);
+        if (response.error) {
+          alert(response.error);
+          setLoading(false);
+          return;
+        }
+        if (response.success) {
+          console.log('Joined room successfully:', response);
+          setFiles(response.files);
+          setMessages(response.messages);
+          setIsEditable(response.isEditable);
+          setIsCreator(response.isCreator);
+          setLoading(false);
+        }
+      });
 
-    // Set up content syncing using Yjs observer
-    let lastSavedContent = '';
-    const debouncedSave = debounce(async (content) => {
-      if (!isInitialized || content === lastSavedContent) return;
-      
-      lastSavedContent = content;
-      console.log('Syncing content to MongoDB:', content.substring(0, 100));
-      
-      socket.emit('save_content', { roomId, text: content }, (response) => {
-        if (!response?.success) {
-          console.error('Failed to sync content:', response?.error);
+      // Listen for editability changes
+      socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
+        console.log(`Editability changed to: ${newIsEditable}`);
+        setIsEditable(newIsEditable);
+      });
+
+      // Listen for new messages
+      socket.on('receive_message', (message) => {
+        console.log('Received message:', message);
+        setMessages((prevMessages) => [...prevMessages, message]);
+
+        // If chat is not visible, set unread messages flag
+        if (!chatVisible) {
+          setHasUnreadMessages(true);
+        }
+      });
+
+      // Listen for typing indicators
+      socket.on('user_typing', ({ userId, userName }) => {
+        console.log(`${userName} is typing...`);
+        setTypingUsers((prevTypingUsers) => {
+          if (!prevTypingUsers.some(user => user.userId === userId)) {
+            return [...prevTypingUsers, { userId, userName }];
+          }
+          return prevTypingUsers;
+        });
+      });
+
+      socket.on('user_stopped_typing', ({ userId }) => {
+        console.log(`User ${userId} stopped typing.`);
+        setTypingUsers((prevTypingUsers) => prevTypingUsers.filter(user => user.userId !== userId));
+      });
+
+      socket.on('room_deleted', ({ message, deleteAfter }) => {
+        if (deleteAfter && new Date() > new Date(deleteAfter)) {
+          alert(message);
+          // Clear the content to sync with the deletion
+          ydoc.getText('shared-text').delete(0, ydoc.getText('shared-text').length);
+          navigate('/');
         } else {
-          console.log('Content successfully synced to MongoDB');
+          alert(message);
         }
       });
-    }, 1000);
 
-    // Initialize room and content
-    const initialize = async () => {
-      try {
-        // First fetch MongoDB content
-        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Clear any existing content
-          ytext.delete(0, ytext.length);
-          if (data.text?.trim()) {
-            ytext.insert(0, data.text);
-          }
-        }
-
-        // Then join room
-        socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-          if (response.error) {
-            alert(response.error);
-            setLoading(false);
-            return;
-          }
-          if (response.success) {
-            console.log('Joined room successfully:', response);
-            setFiles(response.files);
-            setMessages(response.messages);
-            setIsEditable(response.isEditable);
-            setIsCreator(response.isCreator);
-            setLoading(false);
-            isInitialized = true; // Mark as initialized only after successful join
-          }
-        });
-      } catch (error) {
-        console.error('Error during initialization:', error);
-        setLoading(false);
-      }
-    };
-
-    // Set up the observer for content changes
-    const observer = () => {
-      const content = ytext.toString();
-      if (isInitialized) {
-        debouncedSave(content);
-      }
-    };
-
-    ytext.observe(observer);
-
-    // Start initialization
-    initialize();
-
-    // Set up socket event listeners
-    socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
-      console.log(`Editability changed to: ${newIsEditable}`);
-      setIsEditable(newIsEditable);
-    });
-
-    socket.on('receive_message', (message) => {
-      console.log('Received message:', message);
-      setMessages((prevMessages) => [...prevMessages, message]);
-      if (!chatVisible) {
-        setHasUnreadMessages(true);
-      }
-    });
-
-    socket.on('user_typing', ({ userId, userName }) => {
-      console.log(`${userName} is typing...`);
-      setTypingUsers((prevTypingUsers) => {
-        if (!prevTypingUsers.some(user => user.userId === userId)) {
-          return [...prevTypingUsers, { userId, userName }];
-        }
-        return prevTypingUsers;
-      });
-    });
-
-    socket.on('user_stopped_typing', ({ userId }) => {
-      console.log(`User ${userId} stopped typing.`);
-      setTypingUsers((prevTypingUsers) => 
-        prevTypingUsers.filter(user => user.userId !== userId)
-      );
-    });
-
-    socket.on('room_deleted', ({ message, deleteAfter }) => {
-      if (deleteAfter && new Date() > new Date(deleteAfter)) {
-        alert(message);
-        ytext.delete(0, ytext.length);
-        navigate('/');
-      } else {
-        alert(message);
-      }
-    });
-
-    // Cleanup function
-    return () => {
-      ytext.unobserve(observer);
-      debouncedSave.cancel();
-      socket.off('new_file');
-      socket.off('receive_message');
-      socket.off('user_typing');
-      socket.off('user_stopped_typing');
-      socket.off('editable_state_changed');
-      socket.off('theme_changed');
-      socket.off('room_deleted');
-      socket.off('room_joined');
-      socket.off('content_update');
-    };
-  }
-}, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc, backendUrl]);
+      return () => {
+        socket.off('new_file');
+        socket.off('receive_message');
+        socket.off('user_typing');
+        socket.off('user_stopped_typing');
+        socket.off('editable_state_changed');
+        socket.off('theme_changed');
+        socket.off('room_deleted');
+        socket.off('room_joined');
+        socket.off('content_update');
+      };
+    }
+  }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
 
   // Handle room joined event
   useEffect(() => {
@@ -221,6 +164,85 @@ useEffect(() => {
     };
   }, [ydoc, roomId]);
 
+  // 1. Fetch and load initial content from backend into Yjs
+  useEffect(() => {
+    const fetchInitialContent = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        const data = await response.json();
+
+        if (response.ok && data.text && ydoc) {
+          console.log('Fetched initial content from backend:', data.text.substring(0, 100));
+          const ytext = ydoc.getText('shared-text');
+          ytext.delete(0, ytext.length); // Clear existing content in Yjs
+          ytext.insert(0, data.text); // Set content from backend
+          contentSyncedRef.current = true; // Mark as synced
+        }
+      } catch (error) {
+        console.error('Error fetching initial content:', error);
+      }
+    };
+
+    if (ydoc && isYjsSynced && !contentSyncedRef.current) {
+      fetchInitialContent();
+    }
+  }, [ydoc, isYjsSynced, roomId, backendUrl]);
+
+  // 2. Handle Yjs document updates and save to backend
+  useEffect(() => {
+    if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
+
+    const ytext = ydoc.getText('shared-text');
+    let lastSavedContent = ytext.toString();
+
+    const debouncedSave = debounce(async (content) => {
+      if (!content.trim() || content === lastSavedContent) return;
+
+      console.log('Saving updated content to MongoDB:', content.substring(0, 100));
+      lastSavedContent = content;
+
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: content }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        console.log('Content successfully saved to MongoDB');
+      } else {
+        console.error('Failed to save content to MongoDB');
+      }
+    }, 2000);
+
+    const observer = () => {
+      const content = ytext.toString();
+      debouncedSave(content);
+    };
+
+    ytext.observe(observer);
+
+    return () => {
+      ytext.unobserve(observer);
+      debouncedSave.cancel();
+    };
+  }, [ydoc, isYjsSynced, roomId, backendUrl]);
+
+  // Remove the following useEffect as it's redundant and causes conflicts
+  /*
+  useEffect(() => {
+    const debouncedSaveToMongo = debounce((roomName, ydoc) => {
+      // ...
+    }, 2000);
+
+    ydoc.on('update', () => {
+      debouncedSaveToMongo(roomName, ydoc);
+    });
+  }, []);
+  */
 
   // Handle synchronization timeout
   useEffect(() => {
