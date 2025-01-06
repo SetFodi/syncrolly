@@ -48,25 +48,24 @@ async function loadDocument(roomName) {
     const ydoc = new Y.Doc();
     const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
 
-if (mongoDoc && typeof mongoDoc.text === 'string' && mongoDoc.text !== '') {
-  ydoc.getText('shared-text').insert(0, mongoDoc.text);
-  console.log(`Loaded content from MongoDB for room: ${roomName}`);
-} else {
-  console.log(`No content found in MongoDB for room: ${roomName}. Leaving Yjs document unchanged.`);
-}
-      
-      // Optionally, initialize the 'text' field in MongoDB if it doesn't exist
-      await roomsCollection.updateOne(
-        { roomId: roomName },
-        { $set: { text: '', lastActivity: new Date() } },
-        { upsert: true }
-      );
+    if (mongoDoc && typeof mongoDoc.text === 'string' && mongoDoc.text !== '') {
+      ydoc.getText('shared-text').insert(0, mongoDoc.text);
+      console.log(`Loaded content from MongoDB for room: ${roomName}`);
+    } else {
+      console.log(`No content found in MongoDB for room: ${roomName}. Leaving Yjs document unchanged.`);
     }
+
+    // Optionally, initialize the 'text' field in MongoDB if it doesn't exist
+    await roomsCollection.updateOne(
+      { roomId: roomName },
+      { $set: { text: '', lastActivity: new Date() } },
+      { upsert: true }
+    );
 
     return ydoc;
   } catch (err) {
     console.error(`Error loading document "${roomName}":`, err);
-    throw err;
+    throw err; // Rethrow the error to propagate it
   }
 }
 
