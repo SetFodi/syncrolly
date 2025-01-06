@@ -45,7 +45,6 @@ function RoomPageContent() {
   const [fileInput, setFileInput] = useState(null);
   const [isEditable, setIsEditable] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loading, setLoading] = useState(isNameSet);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
   const [contentSynced, setContentSynced] = useState(false);
