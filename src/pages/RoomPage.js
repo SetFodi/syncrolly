@@ -165,7 +165,6 @@ function RoomPageContent() {
   }, [ydoc, roomId]);
 
   // 1. Fetch and load initial content from backend into Yjs
-  // 1. Fetch and load initial content from backend into Yjs
   useEffect(() => {
     const fetchInitialContent = async () => {
       try {
@@ -175,14 +174,19 @@ function RoomPageContent() {
         });
         const data = await response.json();
 
-        if (response.ok && data.text && ydoc) {
-          console.log('Fetched initial content from backend:', data.text.substring(0, 100));
-          const ytext = ydoc.getText('shared-text');
-          if (ytext.length === 0) { // Load only if document is empty
-            ytext.insert(0, data.text); // Set content from backend
-          }
-          contentSyncedRef.current = true; // Mark as synced
-        }
+if (response.ok && data.text && ydoc) {
+  console.log('Fetched initial content from backend:', data.text.substring(0, 100));
+  const ytext = ydoc.getText('shared-text');
+
+  // Compare MongoDB content with Yjs document
+  if (ytext.toString() !== data.text) {
+    ytext.delete(0, ytext.length); // Clear existing content
+    ytext.insert(0, data.text);   // Load content from backend
+    console.log('Updated Yjs document with backend content');
+  }
+
+  contentSyncedRef.current = true; // Mark as synced
+}
       } catch (error) {
         console.error('Error fetching initial content:', error);
       }
@@ -193,8 +197,6 @@ function RoomPageContent() {
     }
   }, [ydoc, isYjsSynced, roomId, backendUrl]);
 
-
-  // 2. Handle Yjs document updates and save to backend
   // 2. Handle Yjs document updates and save to backend
   useEffect(() => {
     if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
@@ -222,8 +224,7 @@ function RoomPageContent() {
       }
     }, 2000);
 
-    const observer = (event, origin) => {
-      if (!contentSyncedRef.current || origin === 'initial-load') return; // Skip during initial load
+    const observer = () => {
       const content = ytext.toString();
       debouncedSave(content);
     };
@@ -248,6 +249,34 @@ function RoomPageContent() {
     });
   }, []);
   */
+useEffect(() => {
+  const fetchContentWithRetry = async (retries = 3) => {
+    try {
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, { method: 'GET', credentials: 'include' });
+      const data = await response.json();
+
+      if (response.ok && data.text) {
+        const ytext = ydoc.getText('shared-text');
+        if (ytext.toString() !== data.text) {
+          ytext.delete(0, ytext.length);
+          ytext.insert(0, data.text);
+          console.log('Content synced from backend after retry');
+        }
+      }
+    } catch (error) {
+      if (retries > 0) {
+        console.error('Retrying content fetch...', error);
+        await fetchContentWithRetry(retries - 1);
+      } else {
+        console.error('Failed to fetch content after retries:', error);
+      }
+    }
+  };
+
+  if (ydoc && isYjsSynced && !contentSyncedRef.current) {
+    fetchContentWithRetry();
+  }
+}, [ydoc, isYjsSynced, roomId, backendUrl]);
 
   // Handle synchronization timeout
   useEffect(() => {
