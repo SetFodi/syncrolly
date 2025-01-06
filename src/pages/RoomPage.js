@@ -49,6 +49,7 @@ function RoomPageContent() {
   const typingTimeoutRef = useRef(null);
   const [contentSynced, setContentSynced] = useState(false);
   const hasInitialSync = useRef(false);
+  const contentSyncedRef = useRef(false);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState("javascript"); // Updated initial value
   const [syncTimeout, setSyncTimeout] = useState(false);
