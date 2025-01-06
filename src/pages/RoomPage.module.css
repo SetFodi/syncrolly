@@ -70,7 +70,16 @@ html, body {
   border-radius: 4px;
   /* Add more styles as needed */
 }
+.room-container .refresh-note{
+text-align: center;
+  padding: 10px;
+  background-color: black; /* Example style */
+  color: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
 
+
+}
 .syncrolly-logo:hover {
   transform: scale(1.05);
 }
