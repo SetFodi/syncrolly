@@ -44,21 +44,24 @@ const lastAccess = new Map();
 
 // Helper function to load document state
 async function loadDocument(roomName) {
-    try {
-        const ydoc = new Y.Doc();
-        const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
-        if (mongoDoc?.text) {
-            ydoc.getText('shared-text').insert(0, mongoDoc.text);
-            console.log(`Loaded content from MongoDB for room: ${roomName}`);
-        } else {
-            console.log(`No content in MongoDB for room: ${roomName}, initializing empty document.`);
-        }
-        return ydoc;
-    } catch (err) {
-        console.error(`Error loading document "${roomName}":`, err);
-        throw err;
+  try {
+    const ydoc = new Y.Doc();
+    const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
+
+    if (mongoDoc?.text) {
+      ydoc.getText('shared-text').insert(0, mongoDoc.text);
+      console.log(`Loaded content from MongoDB for room: ${roomName}`);
+    } else {
+      console.log(`No content found in MongoDB for room: ${roomName}.`);
     }
+
+    return ydoc;
+  } catch (err) {
+    console.error(`Error loading document "${roomName}":`, err);
+    throw err;
+  }
 }
+
 
 
 async function checkRoomExists(roomName) {
@@ -85,18 +88,22 @@ const syncToMongo = async (roomName, ydoc) => {
   );
   console.log(`Synced room "${roomName}" to MongoDB`);
 };
-
 const debouncedSyncToMongo = debounce(async (roomName, ydoc) => {
+  try {
     const content = ydoc.getText('shared-text').toString();
     if (!content.trim()) return;
 
     await roomsCollection.updateOne(
-        { roomId: roomName },
-        { $set: { text: content, lastActivity: new Date() } },
-        { upsert: true }
+      { roomId: roomName },
+      { $set: { text: content, lastActivity: new Date() } },
+      { upsert: true }
     );
     console.log(`Room "${roomName}" content synced to MongoDB.`);
+  } catch (error) {
+    console.error(`Failed to sync room "${roomName}" to MongoDB:`, error);
+  }
 }, 1000);
+
 
 
 async function cleanupDocument(roomName) {
