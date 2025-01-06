@@ -48,12 +48,12 @@ async function loadDocument(roomName) {
     const ydoc = new Y.Doc();
     const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
 
-    if (mongoDoc && typeof mongoDoc.text === 'string') {
-      ydoc.getText('shared-text').insert(0, mongoDoc.text);
-      console.log(`Loaded content from MongoDB for room: ${roomName}`);
-    } else {
-      console.log(`No content found in MongoDB for room: ${roomName}. Initializing with empty content.`);
-      ydoc.getText('shared-text').insert(0, '');
+if (mongoDoc && typeof mongoDoc.text === 'string' && mongoDoc.text !== '') {
+  ydoc.getText('shared-text').insert(0, mongoDoc.text);
+  console.log(`Loaded content from MongoDB for room: ${roomName}`);
+} else {
+  console.log(`No content found in MongoDB for room: ${roomName}. Leaving Yjs document unchanged.`);
+}
       
       // Optionally, initialize the 'text' field in MongoDB if it doesn't exist
       await roomsCollection.updateOne(
