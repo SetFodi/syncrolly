@@ -70,11 +70,36 @@ function RoomPageContent() {
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-    if (isNameSet && ydoc) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+useEffect(() => {
+  if (isNameSet && ydoc) {
+    setLoading(true);
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
+    // First, fetch the content from MongoDB
+    const fetchInitialContent = async () => {
+      try {
+        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.text) {
+            console.log('Fetched initial content from MongoDB');
+            const ytext = ydoc.getText('shared-text');
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, data.text);
+            contentSyncedRef.current = true; // Mark as synced
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching initial content:', error);
+      }
+    };
+
+    // Fetch content before joining room
+    fetchInitialContent().then(() => {
       socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
         console.log('join_room response:', response);
         if (response.error) {
@@ -91,6 +116,16 @@ function RoomPageContent() {
           setLoading(false);
         }
       });
+    });
+    
+    const syncInterval = setInterval(() => {
+      const content = ydoc.getText('shared-text').toString();
+      socket.emit('save_content', { roomId, text: content }, (response) => {
+        if (!response?.success) {
+          console.error('Failed to sync content:', response?.error);
+        }
+      });
+    }, 5000); // Sync every 5 seconds
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -137,6 +172,7 @@ function RoomPageContent() {
       });
 
       return () => {
+        clearInterval(syncInterval);
         socket.off('new_file');
         socket.off('receive_message');
         socket.off('user_typing');
@@ -164,32 +200,6 @@ function RoomPageContent() {
     };
   }, [ydoc, roomId]);
 
-  // 1. Fetch and load initial content from backend into Yjs
-  useEffect(() => {
-    const fetchInitialContent = async () => {
-      try {
-        const response = await fetch(`${backendUrl}/room/${roomId}/content`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-        const data = await response.json();
-
-        if (response.ok && data.text && ydoc) {
-          console.log('Fetched initial content from backend:', data.text.substring(0, 100));
-          const ytext = ydoc.getText('shared-text');
-          ytext.delete(0, ytext.length); // Clear existing content in Yjs
-          ytext.insert(0, data.text); // Set content from backend
-          contentSyncedRef.current = true; // Mark as synced
-        }
-      } catch (error) {
-        console.error('Error fetching initial content:', error);
-      }
-    };
-
-    if (ydoc && isYjsSynced && !contentSyncedRef.current) {
-      fetchInitialContent();
-    }
-  }, [ydoc, isYjsSynced, roomId, backendUrl]);
 
   // 2. Handle Yjs document updates and save to backend
   useEffect(() => {
