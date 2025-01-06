@@ -48,11 +48,19 @@ async function loadDocument(roomName) {
     const ydoc = new Y.Doc();
     const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
 
-    if (mongoDoc?.text) {
+    if (mongoDoc && typeof mongoDoc.text === 'string') {
       ydoc.getText('shared-text').insert(0, mongoDoc.text);
       console.log(`Loaded content from MongoDB for room: ${roomName}`);
     } else {
-      console.log(`No content found in MongoDB for room: ${roomName}.`);
+      console.log(`No content found in MongoDB for room: ${roomName}. Initializing with empty content.`);
+      ydoc.getText('shared-text').insert(0, '');
+      
+      // Optionally, initialize the 'text' field in MongoDB if it doesn't exist
+      await roomsCollection.updateOne(
+        { roomId: roomName },
+        { $set: { text: '', lastActivity: new Date() } },
+        { upsert: true }
+      );
     }
 
     return ydoc;
@@ -61,6 +69,7 @@ async function loadDocument(roomName) {
     throw err;
   }
 }
+
 
 
 
