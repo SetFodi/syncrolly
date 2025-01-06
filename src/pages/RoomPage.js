@@ -87,18 +87,25 @@ useEffect(() => {
           const data = await response.json();
           if (data.text) {
             console.log('Fetched initial content from MongoDB:', data.text.substring(0, 100));
+            // Clear existing content first
             const ytext = ydoc.getText('shared-text');
             ytext.delete(0, ytext.length);
-            ytext.insert(0, data.text);
+            // Only insert if there's actually content
+            if (data.text.trim()) {
+              ytext.insert(0, data.text);
+            }
             contentSyncedRef.current = true;
           } else {
             console.log('No initial content in MongoDB');
-            contentSyncedRef.current = true; // Mark as synced even if empty
+            // Ensure Yjs document is empty
+            const ytext = ydoc.getText('shared-text');
+            ytext.delete(0, ytext.length);
+            contentSyncedRef.current = true;
           }
         }
       } catch (error) {
         console.error('Error fetching initial content:', error);
-        contentSyncedRef.current = true; // Mark as synced even on error to prevent blocking
+        contentSyncedRef.current = true;
       }
     };
 
@@ -109,8 +116,8 @@ useEffect(() => {
     const debouncedSave = debounce(async (content) => {
       if (content === lastSavedContent) return;
       
-      console.log('Syncing content to MongoDB:', content.substring(0, 100));
       lastSavedContent = content;
+      console.log('Syncing content to MongoDB:', content.substring(0, 100));
       
       socket.emit('save_content', { roomId, text: content }, (response) => {
         if (!response?.success) {
@@ -120,6 +127,15 @@ useEffect(() => {
         }
       });
     }, 1000);
+
+    // Fetch content before setting up observers to avoid duplicate content
+    fetchInitialContent().then(() => {
+      // Set up the observer for content changes
+      ytext.observe(() => {
+        if (!contentSyncedRef.current) return;
+        const content = ytext.toString();
+        debouncedSave(content);
+      });
 
     const observer = () => {
       if (!contentSyncedRef.current) return; // Don't sync until initial content is loaded
