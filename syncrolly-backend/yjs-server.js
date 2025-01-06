@@ -45,23 +45,21 @@ const lastAccess = new Map();
 // Helper function to load document state
 async function loadDocument(roomName) {
     try {
-        const ydoc = new Y.Doc(); // Start with a fresh Yjs document
-
-        // Load content from MongoDB
+        const ydoc = new Y.Doc();
         const mongoDoc = await roomsCollection.findOne({ roomId: roomName });
         if (mongoDoc?.text) {
             ydoc.getText('shared-text').insert(0, mongoDoc.text);
-            console.log(`Loaded initial content from MongoDB for room: ${roomName}`);
+            console.log(`Loaded content from MongoDB for room: ${roomName}`);
         } else {
-            console.log(`No content found in MongoDB for room: ${roomName}`);
+            console.log(`No content in MongoDB for room: ${roomName}, initializing empty document.`);
         }
-
         return ydoc;
     } catch (err) {
         console.error(`Error loading document "${roomName}":`, err);
         throw err;
     }
 }
+
 
 async function checkRoomExists(roomName) {
   if (!roomsCollection) return false;
@@ -88,31 +86,36 @@ const syncToMongo = async (roomName, ydoc) => {
   console.log(`Synced room "${roomName}" to MongoDB`);
 };
 
-const debouncedSyncToMongo = debounce(syncToMongo, 1000); // Reduce delay
+const debouncedSyncToMongo = debounce(async (roomName, ydoc) => {
+    const content = ydoc.getText('shared-text').toString();
+    if (!content.trim()) return;
+
+    await roomsCollection.updateOne(
+        { roomId: roomName },
+        { $set: { text: content, lastActivity: new Date() } },
+        { upsert: true }
+    );
+    console.log(`Room "${roomName}" content synced to MongoDB.`);
+}, 1000);
+
 
 async function cleanupDocument(roomName) {
-    try {
-        const docInfo = docsMap.get(roomName);
-        if (!docInfo) return;
+    const docInfo = docsMap.get(roomName);
+    if (!docInfo) return;
 
-        const { ydoc } = docInfo;
+    const { ydoc } = docInfo;
+    const content = ydoc.getText('shared-text').toString();
 
-        const roomExists = await checkRoomExists(roomName);
-        if (roomExists) {
-            const update = Y.encodeStateAsUpdate(ydoc);
-            await Promise.all([
-                ldb.storeUpdate(roomName, update), // Save Yjs state to LevelDB.
-                syncToMongo(roomName, ydoc),      // Save content to MongoDB.
-            ]);
-        }
+    await roomsCollection.updateOne(
+        { roomId: roomName },
+        { $set: { text: content, lastActivity: new Date() } },
+        { upsert: true }
+    );
 
-        docsMap.delete(roomName);
-        lastAccess.delete(roomName);
-        console.log(`Cleaned up document "${roomName}" (removed from memory)`);
-    } catch (err) {
-        console.error(`Error cleaning up document "${roomName}":`, err);
-    }
+    docsMap.delete(roomName);
+    console.log(`Room "${roomName}" cleaned up and persisted.`);
 }
+
 
 const server = http.createServer((req, res) => {
   res.writeHead(200);
@@ -126,51 +129,53 @@ wss.on('connection', async (conn, request) => {
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'default-room';
 
   try {
-    // Ensure room exists in MongoDB
+    // Ensure the room exists in MongoDB
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
-      console.log(`Room "${roomName}" not found in MongoDB; closing connection`);
+      console.log(`Room "${roomName}" not found in MongoDB; closing connection.`);
       conn.close();
       return;
     }
 
-    // Update last access time
+    // Update the last access time for the room
     lastAccess.set(roomName, Date.now());
 
-    // Initialize or retrieve document
+    // Initialize or retrieve the document from memory or MongoDB
     let docInfo = docsMap.get(roomName);
     if (!docInfo) {
-      const ydoc = await loadDocument(roomName);
+      console.log(`Room "${roomName}" not in memory, loading from MongoDB.`);
+      const ydoc = await loadDocument(roomName); // Load document from MongoDB
       const awareness = new Awareness(ydoc);
       docInfo = { ydoc, awareness };
       docsMap.set(roomName, docInfo);
 
-      // Attach update listener
+      // Listen for updates to synchronize with MongoDB
       ydoc.on('update', () => {
-        debouncedSyncToMongo(roomName, ydoc);
+        debouncedSyncToMongo(roomName, ydoc); // Sync updates to MongoDB
       });
     }
 
-    // Safely destructure ydoc and awareness now
+    // Destructure the document information
     const { ydoc, awareness } = docInfo;
 
-    // Set up WebSocket connection
+    // Set up the WebSocket connection with Yjs
     setupWSConnection(conn, request, {
       docName: roomName,
-      gc: false,
+      gc: false, // Garbage collection disabled to retain state
       awareness,
     });
 
-    // Set up persistence interval
+    // Periodic persistence to MongoDB and LevelDB
     const intervalId = setInterval(async () => {
       try {
         if (!docsMap.has(roomName)) {
-          clearInterval(intervalId);
+          clearInterval(intervalId); // Stop interval if the room is no longer in memory
           return;
         }
 
         const stillExists = await checkRoomExists(roomName);
         if (!stillExists) {
+          console.log(`Room "${roomName}" removed from MongoDB; clearing from memory.`);
           clearInterval(intervalId);
           docsMap.delete(roomName);
           lastAccess.delete(roomName);
@@ -180,27 +185,30 @@ wss.on('connection', async (conn, request) => {
         const currentTime = Date.now();
         const lastTime = lastAccess.get(roomName) || 0;
         if (currentTime - lastTime > CLEANUP_TIMEOUT) {
+          console.log(`Cleaning up room "${roomName}" due to inactivity.`);
           clearInterval(intervalId);
-          await cleanupDocument(roomName);
+          await cleanupDocument(roomName); // Save and clean up the document
         } else {
+          // Periodically save updates
           const update = Y.encodeStateAsUpdate(ydoc);
           await Promise.all([
-            ldb.storeUpdate(roomName, update),
-            syncToMongo(roomName, ydoc),
+            ldb.storeUpdate(roomName, update), // Save Yjs state to LevelDB
+            syncToMongo(roomName, ydoc),      // Save content to MongoDB
           ]);
         }
       } catch (err) {
-        console.error(`Error in interval for room "${roomName}":`, err);
+        console.error(`Error in persistence interval for room "${roomName}":`, err);
       }
     }, PERSISTENCE_INTERVAL);
 
-    // Update lastAccess on document changes
+    // Update last access time on document changes
     ydoc.on('update', () => {
       lastAccess.set(roomName, Date.now());
     });
 
     // Handle connection close
     conn.on('close', async () => {
+      console.log(`Connection closed for room "${roomName}".`);
       try {
         if (docsMap.has(roomName)) {
           const stillExists = await checkRoomExists(roomName);
@@ -213,7 +221,7 @@ wss.on('connection', async (conn, request) => {
           }
         }
       } catch (err) {
-        console.error(`Error during final save for "${roomName}":`, err);
+        console.error(`Error during final save for room "${roomName}":`, err);
       }
     });
 
@@ -222,6 +230,7 @@ wss.on('connection', async (conn, request) => {
     conn.close();
   }
 });
+
 
 // Periodic cleanup of stale rooms
 setInterval(async () => {
