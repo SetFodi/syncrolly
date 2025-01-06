@@ -63,14 +63,11 @@ async function loadDocument(roomName) {
     }
 }
 
-
-
 async function checkRoomExists(roomName) {
   if (!roomsCollection) return false;
   const room = await roomsCollection.findOne({ roomId: roomName });
   return !!room;
 }
-
 
 const syncToMongo = async (roomName, ydoc) => {
   const content = ydoc.getText('shared-text').toString();
@@ -92,10 +89,6 @@ const syncToMongo = async (roomName, ydoc) => {
 };
 
 const debouncedSyncToMongo = debounce(syncToMongo, 1000); // Reduce delay
-
-
-
-
 
 async function cleanupDocument(roomName) {
     try {
@@ -120,7 +113,6 @@ async function cleanupDocument(roomName) {
         console.error(`Error cleaning up document "${roomName}":`, err);
     }
 }
-
 
 const server = http.createServer((req, res) => {
   res.writeHead(200);
@@ -161,6 +153,13 @@ wss.on('connection', async (conn, request) => {
 
     // Safely destructure ydoc and awareness now
     const { ydoc, awareness } = docInfo;
+
+    // Set up WebSocket connection
+    setupWSConnection(conn, request, {
+      docName: roomName,
+      gc: false,
+      awareness,
+    });
 
     // Set up persistence interval
     const intervalId = setInterval(async () => {
@@ -216,26 +215,6 @@ wss.on('connection', async (conn, request) => {
       } catch (err) {
         console.error(`Error during final save for "${roomName}":`, err);
       }
-    });
-
-    // Set up WebSocket connection
-    setupWSConnection(conn, request, {
-      docName: roomName,
-      gc: false,
-      awareness,
-    });
-  } catch (err) {
-    console.error(`Error handling connection for room "${roomName}":`, err);
-    conn.close();
-  }
-});
-
-
-    // Set up WebSocket connection
-    setupWSConnection(conn, request, {
-      docName: roomName,
-      gc: false,
-      awareness,
     });
 
   } catch (err) {
