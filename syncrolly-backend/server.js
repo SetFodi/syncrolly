@@ -355,9 +355,10 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
 
         if (!room) {
             if (isCreator) {
+                // Initialize the room with empty content
                 room = {
                     roomId,
-                    text: '',
+                    text: '', // Initialize with empty text
                     messages: [],
                     users: {},
                     theme: 'light',
@@ -366,42 +367,55 @@ socket.on('join_room', async ({ roomId, userName, userId, isCreator }, callback)
                     isEditable: true,
                 };
                 await roomsCollection.insertOne(room);
+
+                // Force an immediate content save if there's initial content
+                const content = ""; // Start with empty content
+                await roomsCollection.updateOne(
+                    { roomId },
+                    { 
+                        $set: { 
+                            text: content,
+                            lastActivity: new Date()
+                        }
+                    }
+                );
             } else {
                 return callback({ error: 'Room does not exist.' });
             }
         }
 
-        // Add user to room
-        room.users[userId] = userName;
+        // Add user to room in a separate update to avoid race conditions
         await roomsCollection.updateOne(
             { roomId },
             {
                 $set: {
-                    users: room.users,
+                    [`users.${userId}`]: userName,
                     lastActivity: new Date(),
-                },
+                }
             }
         );
 
         socket.join(roomId);
         socketUserMap.set(socket.id, { userId, roomId });
 
+        // Get the latest room state after all updates
+        const updatedRoom = await roomsCollection.findOne({ roomId });
+
         callback({
             success: true,
-            text: room.text, // Include initial text content
-            messages: room.messages,
-            theme: room.theme,
+            text: updatedRoom.text || '', // Send the latest text
+            messages: updatedRoom.messages,
+            theme: updatedRoom.theme,
             files: await uploadsCollection.find({ roomId }).toArray(),
-            users: room.users,
-            isCreator: room.creatorId === userId,
-            isEditable: room.isEditable,
+            users: updatedRoom.users,
+            isCreator: updatedRoom.creatorId === userId,
+            isEditable: updatedRoom.isEditable,
         });
     } catch (error) {
         console.error('Error in join_room:', error);
         callback({ error: 'Internal Server Error' });
     }
 });
-
 
   // Handle toggle_editability
   socket.on('toggle_editability', async ({ roomId, userId }, callback) => {
