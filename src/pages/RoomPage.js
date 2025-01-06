@@ -165,6 +165,7 @@ function RoomPageContent() {
   }, [ydoc, roomId]);
 
   // 1. Fetch and load initial content from backend into Yjs
+  // 1. Fetch and load initial content from backend into Yjs
   useEffect(() => {
     const fetchInitialContent = async () => {
       try {
@@ -177,8 +178,9 @@ function RoomPageContent() {
         if (response.ok && data.text && ydoc) {
           console.log('Fetched initial content from backend:', data.text.substring(0, 100));
           const ytext = ydoc.getText('shared-text');
-          ytext.delete(0, ytext.length); // Clear existing content in Yjs
-          ytext.insert(0, data.text); // Set content from backend
+          if (ytext.length === 0) { // Load only if document is empty
+            ytext.insert(0, data.text); // Set content from backend
+          }
           contentSyncedRef.current = true; // Mark as synced
         }
       } catch (error) {
@@ -191,6 +193,8 @@ function RoomPageContent() {
     }
   }, [ydoc, isYjsSynced, roomId, backendUrl]);
 
+
+  // 2. Handle Yjs document updates and save to backend
   // 2. Handle Yjs document updates and save to backend
   useEffect(() => {
     if (!ydoc || !isYjsSynced || !contentSyncedRef.current) return;
@@ -218,7 +222,8 @@ function RoomPageContent() {
       }
     }, 2000);
 
-    const observer = () => {
+    const observer = (event, origin) => {
+      if (!contentSyncedRef.current || origin === 'initial-load') return; // Skip during initial load
       const content = ytext.toString();
       debouncedSave(content);
     };
