@@ -1,5 +1,3 @@
-// yjs-server.js
-
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils.js';
@@ -65,106 +63,40 @@ async function loadDocument(roomName) {
     }
 }
 
+
+
 async function checkRoomExists(roomName) {
   if (!roomsCollection) return false;
   const room = await roomsCollection.findOne({ roomId: roomName });
   return !!room;
 }
 
+
 const syncToMongo = async (roomName, ydoc) => {
   try {
-    const ytext = ydoc.getText('shared-text');
-    const content = ytext.toString();
-
-    // Better content validation
-    if (content === null || content === undefined) {
-      console.error(`Invalid content for room "${roomName}" - sync aborted`);
-      return;
-    }
-
-    console.log(`\nSync attempt for room "${roomName}":
-      - Content length: ${content.length}
-      - First 100 chars: "${content.substring(0, 100)}"
-      - Content type: ${typeof content}
-      - Timestamp: ${new Date().toISOString()}
-    `);
+    const content = ydoc.getText('shared-text').toString();
+    if (!content.trim()) return;
 
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
-      console.error(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
+      console.log(`Room "${roomName}" does not exist in MongoDB; skipping sync`);
       return;
     }
 
-    // Compare with existing content before updating
-    const existingDoc = await roomsCollection.findOne({ roomId: roomName });
-    if (existingDoc?.text === content) {
-      console.log(`Content unchanged for room "${roomName}" - skipping update`);
-      return;
-    }
-
-    const result = await roomsCollection.updateOne(
+    await roomsCollection.updateOne(
       { roomId: roomName },
-      { 
-        $set: { 
-          text: content,
-          lastActivity: new Date(),
-          lastSync: new Date(),
-          contentLength: content.length // Add this for easier debugging
-        } 
-      },
-      { upsert: false }
+      { $set: { text: content, lastActivity: new Date() } }
     );
-
-    if (result.matchedCount === 0) {
-      console.error(`No document matched for room "${roomName}"`);
-      return;
-    }
-
-    // Enhanced verification
-    const verifyDoc = await roomsCollection.findOne({ roomId: roomName });
-    const verifyContent = verifyDoc?.text || '';
-    
-    console.log(`\nPost-update verification for "${roomName}":
-      - MongoDB content length: ${verifyContent.length}
-      - Yjs content length: ${content.length}
-      - Length match: ${verifyContent.length === content.length}
-      - Content match: ${verifyContent === content}
-      - ModifiedCount: ${result.modifiedCount}
-    `);
-
-    if (verifyContent !== content) {
-      console.error(`\nContent verification failed for "${roomName}":
-        - Expected length: ${content.length}
-        - Actual length: ${verifyContent.length}
-        - First 100 chars expected: "${content.substring(0, 100)}"
-        - First 100 chars actual: "${verifyContent.substring(0, 100)}"
-      `);
-
-      // Retry with explicit content check
-      console.log('Attempting sync retry...');
-      await roomsCollection.updateOne(
-        { roomId: roomName },
-        { 
-          $set: { 
-            text: content,
-            lastActivity: new Date(),
-            lastSync: new Date(),
-            contentLength: content.length,
-            retryCount: (verifyDoc.retryCount || 0) + 1
-          } 
-        },
-        { upsert: false }
-      );
-    }
-
+    console.log(`Successfully synced document "${roomName}" to MongoDB`);
   } catch (error) {
     console.error(`Error syncing "${roomName}" to MongoDB:`, error);
-    throw error;
   }
 };
 
-// Debounce synchronization to MongoDB
-const debouncedSyncToMongo = debounce(syncToMongo, 1000); 
+const debouncedSyncToMongo = debounce(syncToMongo, 2000);
+
+
+
 
 async function cleanupDocument(roomName) {
     try {
@@ -190,6 +122,7 @@ async function cleanupDocument(roomName) {
     }
 }
 
+
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Yjs WebSocket Server is running (ESM).');
@@ -197,17 +130,15 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-// In your yjs-server.js, modify the connection handler section:
-
 wss.on('connection', async (conn, request) => {
   const parsedUrl = url.parse(request.url, true);
   const roomName = parsedUrl.pathname.slice(1).split('?')[0] || 'default-room';
 
   try {
-    // Ensure room exists in MongoDB
+    // Ensure room exists in Mongo
     const roomExists = await checkRoomExists(roomName);
     if (!roomExists) {
-      console.log(`Room "${roomName}" not found in MongoDB; closing connection`);
+      console.log(`Room "${roomName}" not found in Mongo; closing connection`);
       conn.close();
       return;
     }
@@ -216,84 +147,81 @@ wss.on('connection', async (conn, request) => {
     lastAccess.set(roomName, Date.now());
 
     // Initialize or retrieve document
-   let docInfo = docsMap.get(roomName);
-if (!docInfo) {
-    const ydoc = await loadDocument(roomName);
-    const awareness = new Awareness(ydoc);
-    docsMap.set(roomName, { ydoc, awareness, updateCount: 0 });
-    docInfo = { ydoc, awareness, updateCount: 0 };
+    let docInfo = docsMap.get(roomName);
+    if (!docInfo) {
+      const ydoc = await loadDocument(roomName);
+      const awareness = new Awareness(ydoc);
+      docsMap.set(roomName, { ydoc, awareness });
+      docInfo = { ydoc, awareness };
+       ydoc.on('update', () => {
+                debouncedSyncToMongo(roomName, ydoc);
+            });
+    }
 
-    // Enhanced update handler with better content verification
-    ydoc.on('update', async (update, origin) => {
-        try {
-            lastAccess.set(roomName, Date.now());
-            docInfo.updateCount++;
+    const { ydoc, awareness } = docInfo;
 
-            // Wait a small moment for the update to be applied
-            setTimeout(async () => {
-                // Get the current content immediately after the update
-                const ytext = ydoc.getText('shared-text');
-                const content = ytext.toString();
-                
-                console.log(`\nUpdate #${docInfo.updateCount} received for room "${roomName}":
-                    - Update size: ${update.length} bytes
-                    - Current content length: ${content.length}
-                    - Content preview: "${content.substring(0, 100)}"
-                    - Origin: ${origin}
-                    - Timestamp: ${new Date().toISOString()}
-                `);
-
-                // Only sync if there's actual content
-                const currentContent = ytext.toString();
-                if (content !== null && content !== undefined) {
-                    if (docInfo.updateCount <= 3) {
-                        console.log(`Forcing immediate sync for update #${docInfo.updateCount}`);
-                        await syncToMongo(roomName, ydoc);
-                    } else {
-                        console.log(`Debounced sync scheduled for update #${docInfo.updateCount}`);
-                        debouncedSyncToMongo(roomName, ydoc);
-                    }
-                } else {
-                    console.warn(`Update #${docInfo.updateCount} skipped - no valid content`);
-                }
-            }, 50); // Small delay to ensure update is applied
-
-        } catch (error) {
-            console.error(`Error handling update for "${roomName}":`, error);
+    // Set up persistence interval
+    const intervalId = setInterval(async () => {
+      try {
+        if (!docsMap.has(roomName)) {
+          clearInterval(intervalId);
+          return;
         }
+
+        const stillExists = await checkRoomExists(roomName);
+        if (!stillExists) {
+          clearInterval(intervalId);
+          docsMap.delete(roomName);
+          lastAccess.delete(roomName);
+          return;
+        }
+
+        const currentTime = Date.now();
+        const lastTime = lastAccess.get(roomName) || 0;
+        if (currentTime - lastTime > CLEANUP_TIMEOUT) {
+          clearInterval(intervalId);
+          await cleanupDocument(roomName);
+        } else {
+          const update = Y.encodeStateAsUpdate(ydoc);
+          await Promise.all([
+            ldb.storeUpdate(roomName, update),
+            syncToMongo(roomName, ydoc),
+          ]);
+        }
+      } catch (err) {
+        console.error(`Error in interval for room "${roomName}":`, err);
+      }
+    }, PERSISTENCE_INTERVAL);
+
+    // Update lastAccess on document changes
+    ydoc.on('update', () => {
+      lastAccess.set(roomName, Date.now());
     });
 
-    // Add a specific handler for text changes
-    const ytext = ydoc.getText('shared-text');
-    ytext.observe(event => {
-        console.log(`\nText change observed in "${roomName}":
-            - Delta length: ${event.changes.delta.length}
-            - Current text length: ${ytext.toString().length}
-            - Current text preview: "${ytext.toString().substring(0, 100)}"
-        `);
+    // Handle connection close
+    conn.on('close', async () => {
+      try {
+        if (docsMap.has(roomName)) {
+          const stillExists = await checkRoomExists(roomName);
+          if (stillExists) {
+            const update = Y.encodeStateAsUpdate(ydoc);
+            await Promise.all([
+              ldb.storeUpdate(roomName, update),
+              syncToMongo(roomName, ydoc),
+            ]);
+          }
+        }
+      } catch (err) {
+        console.error(`Error during final save for "${roomName}":`, err);
+      }
     });
-}
 
-const { ydoc, awareness } = docInfo;
-
-// Verify initial content
-const initialContent = ydoc.getText('shared-text').toString();
-console.log(`\nInitial connection state for "${roomName}":
-    - Initial content length: ${initialContent.length}
-    - Content preview: "${initialContent.substring(0, 100)}"
-`);
-
-// Force initial sync only if there's content
-if (initialContent.length > 0) {
-    await syncToMongo(roomName, ydoc);
-}
-
-// Set up WebSocket connection
-setupWSConnection(conn, request, {
-    docName: roomName,
-    gc: false,
-    awareness,
-});
+    // Set up WebSocket connection
+    setupWSConnection(conn, request, {
+      docName: roomName,
+      gc: false,
+      awareness,
+    });
 
   } catch (err) {
     console.error(`Error handling connection for room "${roomName}":`, err);
