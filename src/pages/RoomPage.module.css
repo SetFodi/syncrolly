@@ -80,6 +80,11 @@ text-align: center;
 
 
 }
+.room-container.dark .refresh-note{
+text-align: center;
+  padding: 10px;
+  color: white;
+}
 .syncrolly-logo:hover {
   transform: scale(1.05);
 }
