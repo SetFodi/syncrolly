@@ -38,7 +38,6 @@ function RoomPageContent() {
   const [isNameSet, setIsNameSet] = useState(!!storedUserName);
   const [messages, setMessages] = useState([]);
   const [chatVisible, setChatVisible] = useState(false);
-  const [roomCreationLoading, setRoomCreationLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [theme, setTheme] = useState(storedTheme);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -46,7 +45,6 @@ function RoomPageContent() {
   const [fileInput, setFileInput] = useState(null);
   const [isEditable, setIsEditable] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [syncError, setSyncError] = useState(false);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
   const [contentSynced, setContentSynced] = useState(false);
@@ -78,23 +76,22 @@ function RoomPageContent() {
       setLoading(true);
       console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
- socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-  console.log('join_room response:', response);
-  if (response.error) {
-    alert(response.error);
-    setRoomCreationLoading(false);
-    return;
-  }
-  if (response.success) {
-    console.log('Joined room successfully:', response);
-    setFiles(response.files);
-    setMessages(response.messages);
-    setIsEditable(response.isEditable);
-    setIsCreator(response.isCreator);
-    setRoomCreationLoading(false);
-  }
-});
-setRoomCreationLoading(true);
+      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+        console.log('join_room response:', response);
+        if (response.error) {
+          alert(response.error);
+          setLoading(false);
+          return;
+        }
+        if (response.success) {
+          console.log('Joined room successfully:', response);
+          setFiles(response.files);
+          setMessages(response.messages);
+          setIsEditable(response.isEditable);
+          setIsCreator(response.isCreator);
+          setLoading(false);
+        }
+      });
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -256,37 +253,33 @@ useEffect(() => {
   }, []);
   */
 useEffect(() => {
-    const fetchContentWithRetry = async (retries = 3) => {
-      setLoading(true);
-      setSyncError(false);
+  const fetchContentWithRetry = async (retries = 3) => {
+    try {
+      const response = await fetch(`${backendUrl}/room/${roomId}/content`, { method: 'GET', credentials: 'include' });
+      const data = await response.json();
 
-      try {
-        const response = await fetch(`${backendUrl}/room/${roomId}/content`, { method: 'GET', credentials: 'include' });
-        const data = await response.json();
-
-        if (response.ok && data.text) {
-          const ytext = ydoc.getText('shared-text');
+      if (response.ok && data.text) {
+        const ytext = ydoc.getText('shared-text');
+        if (ytext.toString() !== data.text) {
           ytext.delete(0, ytext.length);
           ytext.insert(0, data.text);
-          console.log('Content loaded from MongoDB');
+          console.log('Content synced from backend after retry');
         }
-      } catch (error) {
-        if (retries > 0) {
-          console.error('Error fetching content, retrying...', error);
-          await fetchContentWithRetry(retries - 1);
-        } else {
-          console.error('Error fetching content, maximum retries reached:', error);
-          setSyncError(true);
-        }
-      } finally {
-        setLoading(false);
       }
-    };
-
-    if (ydoc && roomId) {
-      fetchContentWithRetry();
+    } catch (error) {
+      if (retries > 0) {
+        console.error('Retrying content fetch...', error);
+        await fetchContentWithRetry(retries - 1);
+      } else {
+        console.error('Failed to fetch content after retries:', error);
+      }
     }
-  }, [ydoc, roomId, backendUrl]);
+  };
+
+  if (ydoc && isYjsSynced && !contentSyncedRef.current) {
+    fetchContentWithRetry();
+  }
+}, [ydoc, isYjsSynced, roomId, backendUrl]);
 
   // Handle synchronization timeout
   useEffect(() => {
@@ -581,29 +574,24 @@ useEffect(() => {
               </select>
             </div>
           </div>
- {roomCreationLoading && (
-          <div className={styles['room-creation-loading']}>
-            <p>Creating room, please wait...</p>
-          </div>
-        )}
-<div className={styles['main-content']}>
-          {loading ? (
-            <div className={styles['loading-state']}>
-              <p>Loading content, please wait...</p>
-            </div>
-          ) : syncError ? (
-            <div className={styles['error-state']}>
-              <p>Failed to load content. Please try refreshing the page.</p>
-            </div>
-          ) : (
+
+          <div className={styles['main-content']}>
             <CodeMirror
               extensions={editorExtensions}
               className={`${styles['code-editor']} ${styles[theme]}`}
               readOnly={!(isEditable || isCreator)}
               aria-label="Code Editor"
             />
-          )}
-        </div>
+            {!isYjsSynced && loading && (
+              <div className={styles['yjs-loading-overlay']}>
+                <p>
+                  {syncTimeout ? 
+                    "Synchronization is taking longer than usual. The editor will be available shortly." : 
+                    "Synchronizing editor content..."}
+                </p>
+              </div>
+            )}
+          </div>
 
           <div className={styles['typing-indicator']}>
             {typingUsers.length > 0 && (
