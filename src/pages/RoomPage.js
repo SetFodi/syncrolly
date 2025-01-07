@@ -47,6 +47,8 @@ function RoomPageContent() {
   const [loading, setLoading] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
+const [retryCount, setRetryCount] = useState(0);
   const [contentSynced, setContentSynced] = useState(false);
   const hasInitialSync = useRef(false);
   const contentSyncedRef = useRef(false);
@@ -66,32 +68,69 @@ function RoomPageContent() {
     json: javascript(), // Fallback to JavaScript for JSON
     text: markdown(),   // Fallback to Markdown for plain text
   }), []);
+const retryWithTimeout = async (operation, maxAttempts = 5, initialDelay = 1000) => {
+  let currentAttempt = 0;
+  let delay = initialDelay;
 
+  while (currentAttempt < maxAttempts) {
+    try {
+      const result = await operation();
+      return { success: true, data: result };
+    } catch (error) {
+      currentAttempt++;
+      if (currentAttempt === maxAttempts) {
+        return { success: false, error };
+      }
+      // Exponential backoff with a maximum of 8 seconds
+      delay = Math.min(delay * 1.5, 8000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
   // Access Yjs context
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-  useEffect(() => {
-    if (isNameSet && ydoc) {
-      setLoading(true);
-      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+useEffect(() => {
+  if (isNameSet && ydoc) {
+    setLoading(true);
+    setConnectionStatus('connecting');
+    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          setLoading(false);
-        }
-      });
+    const joinRoom = async () => {
+      const result = await retryWithTimeout(
+        () => new Promise((resolve, reject) => {
+          socket.emit('join_room', 
+            { roomId, userName: storedUserName, userId: storedUserId, isCreator }, 
+            (response) => {
+              if (response.error) {
+                reject(response.error);
+              } else {
+                resolve(response);
+              }
+            }
+          );
+        }),
+        5, // max attempts
+        1000 // initial delay
+      );
+
+      if (result.success) {
+        console.log('Joined room successfully:', result.data);
+        setFiles(result.data.files);
+        setMessages(result.data.messages);
+        setIsEditable(result.data.isEditable);
+        setIsCreator(result.data.isCreator);
+        setConnectionStatus('connected');
+        setLoading(false);
+      } else {
+        setConnectionStatus('failed');
+        setLoading(false);
+        alert('Failed to connect to the room. The server might be waking up. Please try again in a moment.');
+      }
+    };
+
+    joinRoom();
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -574,14 +613,33 @@ useEffect(() => {
               </select>
             </div>
           </div>
-
-          <div className={styles['main-content']}>
-            <CodeMirror
-              extensions={editorExtensions}
-              className={`${styles['code-editor']} ${styles[theme]}`}
-              readOnly={!(isEditable || isCreator)}
-              aria-label="Code Editor"
-            />
+<div className={styles['main-content']}>
+  {connectionStatus !== 'connected' && (
+    <div className={styles['connection-status']}>
+      {connectionStatus === 'connecting' ? (
+        <div className={styles['connecting-message']}>
+          <p>Connecting to room... The server might be waking up.</p>
+          <p>Please wait a moment.</p>
+        </div>
+      ) : connectionStatus === 'failed' ? (
+        <div className={styles['failed-message']}>
+          <p>Failed to connect to the room.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className={styles['retry-button']}
+          >
+            Retry Connection
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )}
+  <CodeMirror
+    extensions={editorExtensions}
+    className={`${styles['code-editor']} ${styles[theme]}`}
+    readOnly={!(isEditable || isCreator)}
+    aria-label="Code Editor"
+  />
             {!isYjsSynced && loading && (
               <div className={styles['yjs-loading-overlay']}>
                 <p>
