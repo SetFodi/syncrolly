@@ -19,7 +19,40 @@ html, body {
   transition: background-color 0.3s, color 0.3s;
   font-family: 'Poppins', sans-serif;
 }
+.connection-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  z-index: 1000;
+}
 
+.connecting-message {
+  color: #2563eb;
+}
+
+.failed-message {
+  color: #dc2626;
+}
+
+.retry-button {
+  margin-top: 10px;
+  padding: 8px 16px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.retry-button:hover {
+  background-color: #1d4ed8;
+}
 .room-container.light {
   background-color: #f5f5f5;
   color: #333;
