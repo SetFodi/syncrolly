@@ -45,6 +45,7 @@ function RoomPageContent() {
   const [fileInput, setFileInput] = useState(null);
   const [isEditable, setIsEditable] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncError, setSyncError] = useState(false);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false); // New state for chat notifications
   const typingTimeoutRef = useRef(null);
   const [contentSynced, setContentSynced] = useState(false);
@@ -253,33 +254,37 @@ useEffect(() => {
   }, []);
   */
 useEffect(() => {
-  const fetchContentWithRetry = async (retries = 3) => {
-    try {
-      const response = await fetch(`${backendUrl}/room/${roomId}/content`, { method: 'GET', credentials: 'include' });
-      const data = await response.json();
+    const fetchContentWithRetry = async (retries = 3) => {
+      setLoading(true);
+      setSyncError(false);
 
-      if (response.ok && data.text) {
-        const ytext = ydoc.getText('shared-text');
-        if (ytext.toString() !== data.text) {
+      try {
+        const response = await fetch(`${backendUrl}/room/${roomId}/content`, { method: 'GET', credentials: 'include' });
+        const data = await response.json();
+
+        if (response.ok && data.text) {
+          const ytext = ydoc.getText('shared-text');
           ytext.delete(0, ytext.length);
           ytext.insert(0, data.text);
-          console.log('Content synced from backend after retry');
+          console.log('Content loaded from MongoDB');
         }
+      } catch (error) {
+        if (retries > 0) {
+          console.error('Error fetching content, retrying...', error);
+          await fetchContentWithRetry(retries - 1);
+        } else {
+          console.error('Error fetching content, maximum retries reached:', error);
+          setSyncError(true);
+        }
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      if (retries > 0) {
-        console.error('Retrying content fetch...', error);
-        await fetchContentWithRetry(retries - 1);
-      } else {
-        console.error('Failed to fetch content after retries:', error);
-      }
-    }
-  };
+    };
 
-  if (ydoc && isYjsSynced && !contentSyncedRef.current) {
-    fetchContentWithRetry();
-  }
-}, [ydoc, isYjsSynced, roomId, backendUrl]);
+    if (ydoc && roomId) {
+      fetchContentWithRetry();
+    }
+  }, [ydoc, roomId, backendUrl]);
 
   // Handle synchronization timeout
   useEffect(() => {
@@ -575,23 +580,24 @@ useEffect(() => {
             </div>
           </div>
 
-          <div className={styles['main-content']}>
+<div className={styles['main-content']}>
+          {loading ? (
+            <div className={styles['loading-state']}>
+              <p>Loading content, please wait...</p>
+            </div>
+          ) : syncError ? (
+            <div className={styles['error-state']}>
+              <p>Failed to load content. Please try refreshing the page.</p>
+            </div>
+          ) : (
             <CodeMirror
               extensions={editorExtensions}
               className={`${styles['code-editor']} ${styles[theme]}`}
               readOnly={!(isEditable || isCreator)}
               aria-label="Code Editor"
             />
-            {!isYjsSynced && loading && (
-              <div className={styles['yjs-loading-overlay']}>
-                <p>
-                  {syncTimeout ? 
-                    "Synchronization is taking longer than usual. The editor will be available shortly." : 
-                    "Synchronizing editor content..."}
-                </p>
-              </div>
-            )}
-          </div>
+          )}
+        </div>
 
           <div className={styles['typing-indicator']}>
             {typingUsers.length > 0 && (
