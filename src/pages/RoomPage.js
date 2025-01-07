@@ -38,6 +38,7 @@ function RoomPageContent() {
   const [isNameSet, setIsNameSet] = useState(!!storedUserName);
   const [messages, setMessages] = useState([]);
   const [chatVisible, setChatVisible] = useState(false);
+  const [roomCreationLoading, setRoomCreationLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [theme, setTheme] = useState(storedTheme);
   const [typingUsers, setTypingUsers] = useState([]);
@@ -77,22 +78,23 @@ function RoomPageContent() {
       setLoading(true);
       console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
 
-      socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
-        console.log('join_room response:', response);
-        if (response.error) {
-          alert(response.error);
-          setLoading(false);
-          return;
-        }
-        if (response.success) {
-          console.log('Joined room successfully:', response);
-          setFiles(response.files);
-          setMessages(response.messages);
-          setIsEditable(response.isEditable);
-          setIsCreator(response.isCreator);
-          setLoading(false);
-        }
-      });
+ socket.emit('join_room', { roomId, userName: storedUserName, userId: storedUserId, isCreator }, (response) => {
+  console.log('join_room response:', response);
+  if (response.error) {
+    alert(response.error);
+    setRoomCreationLoading(false);
+    return;
+  }
+  if (response.success) {
+    console.log('Joined room successfully:', response);
+    setFiles(response.files);
+    setMessages(response.messages);
+    setIsEditable(response.isEditable);
+    setIsCreator(response.isCreator);
+    setRoomCreationLoading(false);
+  }
+});
+setRoomCreationLoading(true);
 
       // Listen for editability changes
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
@@ -579,7 +581,11 @@ useEffect(() => {
               </select>
             </div>
           </div>
-
+ {roomCreationLoading && (
+          <div className={styles['room-creation-loading']}>
+            <p>Creating room, please wait...</p>
+          </div>
+        )}
 <div className={styles['main-content']}>
           {loading ? (
             <div className={styles['loading-state']}>
