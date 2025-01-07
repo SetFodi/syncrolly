@@ -70,7 +70,7 @@ html, body {
   border-radius: 4px;
   /* Add more styles as needed */
 }
-.room-container.dark .refresh-note{
+.room-container.light .refresh-note{
 text-align: center;
   padding: 10px;
   background-color: black; /* Example style */
