@@ -65,7 +65,7 @@ html, body {
 .refresh-note {
   text-align: center;
   padding: 10px;
-  background-color: #f9f9f9; /* Example style */
+  color: black;
   border: 1px solid #ccc;
   border-radius: 4px;
   /* Add more styles as needed */
@@ -73,8 +73,8 @@ html, body {
 .room-container.light .refresh-note{
 text-align: center;
   padding: 10px;
-  background-color: black; /* Example style */
-  color: white;
+  background-color: #f9f9f9; /* Example style */
+  color: black;
   border: 1px solid #ccc;
   border-radius: 4px;
 
