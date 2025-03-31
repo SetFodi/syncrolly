@@ -19,7 +19,7 @@ export const YjsProvider = ({ children, roomId }) => {
       setProvider(newProvider);
       setAwareness(newProvider.awareness);
 
-      newProvider.on('status', (event) => {
+      newProvider.on('status', (event) => {a
         console.log(`Yjs WebsocketProvider status: ${event.status}`);
         setIsYjsSynced(event.status === 'connected');
       });
