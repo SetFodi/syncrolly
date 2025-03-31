@@ -30,9 +30,8 @@ const server = http.createServer(app);
 
 // =====================
 // ===== CORS Setup =====
-// =====================
 const allowedFrontendUrls = (
-  process.env.FRONTEND_URLS || 'http://localhost:3000,https://www.syncrolly.com'
+  process.env.FRONTEND_URLS || 'http://localhost:3000,https://www.syncrolly.com,https://syncrolly.vercel.app'
 )
   .split(',')
   .map((url) => url.trim());
@@ -40,21 +39,24 @@ const allowedFrontendUrls = (
 // Ensure CORS is defined before any routes or middleware
 app.use(
   cors({
-    origin: allowedFrontendUrls, // Allow specific frontend URLs
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'], // Ensure OPTIONS is included
-    allowedHeaders: ['Content-Type', 'Authorization'], // Specify allowed headers
-    credentials: true, // Allow credentials if needed
+    origin: function(origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl requests)
+      if (!origin) return callback(null, true);
+      
+      if (allowedFrontendUrls.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   }),
 );
 
-// Preflight handling (applicable for DELETE and POST requests)
-app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.sendStatus(200);
-});
+// Remove the incorrect app.options middleware
+// app.options('*', (req, res) => { ... });
 
 // =========================
 // ===== Middleware Setup =====
@@ -206,9 +208,7 @@ app.post('/upload/:roomId', upload.single('file'), async (req, res) => {
 app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
   try {
     const { roomId, fileId } = req.params;
-
     if (!ObjectId.isValid(fileId)) {
-      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
       return res.status(400).json({ error: 'Invalid file ID format.' });
     }
 
@@ -217,7 +217,6 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
       _id: new ObjectId(fileId),
     });
     if (!fileToDelete) {
-      res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
       return res.status(404).json({ error: 'File not found.' });
     }
 
@@ -233,7 +232,6 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
       console.error('Failed to delete file from filesystem:', err);
     }
 
-    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
     res.status(200).json({
       success: true,
       message: 'File deleted successfully',
@@ -241,10 +239,7 @@ app.delete('/delete_file/:roomId/:fileId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in file deletion:', error);
-    res.setHeader('Access-Control-Allow-Origin', allowedFrontendUrls.join(','));
-    res
-      .status(500)
-      .json({ error: 'Internal Server Error', details: error.message });
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
 app.get('/room/:roomId/content', async (req, res) => {
