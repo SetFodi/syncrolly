@@ -1,273 +1,982 @@
 /* ============================== */
-/* 1. General Container */
+/* 1. Core Variables & Root Setup */
+/* ============================== */
+:root {
+  --primary-light: #007bff;
+  --primary-dark: #0056b3;
+  --secondary-light: #bb86fc;
+  --secondary-dark: #6200ea;
+  
+  --bg-light: #f9f9f9;
+  --bg-dark: #121212;
+  
+  --text-light-primary: #333;
+  --text-light-secondary: #555;
+  --text-dark-primary: #f5f5f5;
+  --text-dark-secondary: #e0e0e0;
+  
+  --shadow-light: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-dark: 0 10px 30px rgba(0, 0, 0, 0.3);
+  
+  --transition-medium: 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  --transition-fast: 0.3s ease;
+  
+  --border-radius-small: 8px;
+  --border-radius-medium: 15px;
+  --border-radius-large: 30px;
+}
+
+/* ============================== */
+/* 2. General Container */
 /* ============================== */
 .home-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   min-height: 100vh;
-  padding: 40px;
-  font-family: 'Poppins', sans-serif; /* Modern font */
-  transition: background-color 0.3s ease, color 0.3s ease;
-  background-color: #f9f9f9;
-  color: #333;
+  font-family: 'Poppins', sans-serif;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  background-color: var(--bg-light);
+  color: var(--text-light-primary);
+  opacity: 0;
+  overflow: hidden;
+}
+
+.home-container.loaded {
+  opacity: 1;
+  animation: fadeIn 0.8s ease;
 }
 
 .home-container.light {
-  background-color: #f9f9f9;
-  color: #333;
+  background-color: var(--bg-light);
+  color: var(--text-light-primary);
 }
 
 .home-container.dark {
-  background-color: #121212;
-  color: #f9f9f9;
+  background-color: var(--bg-dark);
+  color: var(--text-dark-primary);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ============================== */
-/* 2. Logo Container */
+/* 3. Background Elements */
 /* ============================== */
-.logo-container {
+.background-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 1.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.background-container.animate {
+  opacity: 1;
+}
+
+/* 3.1 Grid Overlay */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  z-index: 1;
+}
+
+.home-container.dark .grid-overlay {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* 3.2 Gradient Orbs */
+.gradient-orbs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.orb1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 123, 255, 0.3) 0%, rgba(0, 123, 255, 0) 70%);
+  top: -250px;
+  left: -100px;
+  animation: orb-float 25s infinite alternate ease-in-out;
+}
+
+.orb2 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(0, 86, 179, 0.2) 0%, rgba(0, 86, 179, 0) 70%);
+  bottom: -300px;
+  right: -200px;
+  animation: orb-float 30s infinite alternate-reverse ease-in-out;
+}
+
+.orb3 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0) 70%);
+  top: 40%;
+  left: 30%;
+  animation: orb-float 20s infinite alternate ease-in-out;
+}
+
+.home-container.dark .orb1 {
+  background: radial-gradient(circle, rgba(187, 134, 252, 0.3) 0%, rgba(187, 134, 252, 0) 70%);
+}
+
+.home-container.dark .orb2 {
+  background: radial-gradient(circle, rgba(98, 0, 234, 0.2) 0%, rgba(98, 0, 234, 0) 70%);
+}
+
+.home-container.dark .orb3 {
+  background: radial-gradient(circle, rgba(138, 43, 226, 0.15) 0%, rgba(138, 43, 226, 0) 70%);
+}
+
+@keyframes orb-float {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(40px, 20px);
+  }
+  100% {
+    transform: translate(-20px, 40px);
+  }
+}
+
+/* ============================== */
+/* 4. Content Area */
+/* ============================== */
+.content-area {
+  position: relative;
+  z-index: 2;
   display: flex;
-  justify-content: center;
-  margin-bottom: 40px;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px;
+  width: 100%;
+}
+
+/* ============================== */
+/* 5. Header */
+/* ============================== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 20px 0;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.header.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 5.1 Logo Container */
+.logo-container {
+  z-index: 10;
 }
 
 .syncrolly-logo {
-  max-width: 250px;
-  max-height: 250px;
-  border-radius: 15px;
-  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: var(--border-radius-medium);
+  transition: transform var(--transition-fast);
 }
 
-.home-container.dark .syncrolly-logo {
-  filter: invert(1) brightness(1.5);
-}
+
 
 .syncrolly-logo:hover {
-  transform: scale(1.08);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-5px);
 }
 
-/* ============================== */
-/* 3. Heading Styles */
-/* ============================== */
-h1 {
-  font-size: 3rem;
-  font-weight: 600;
-  margin-bottom: 20px;
-  letter-spacing: 1px;
+/* 5.2 Theme Toggle */
+.theme-toggle-container {
+  z-index: 10;
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   color: inherit;
+}
+
+.toggle-track {
+  position: relative;
+  width: 60px;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 30px;
+  transition: background-color var(--transition-fast);
+}
+
+.home-container.dark .toggle-track {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  background-color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFA000;
+  font-size: 12px;
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-thumb.active {
+  transform: translateX(30px);
+  background-color: #121212;
+  color: #FFC107;
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================== */
+/* 6. Main Content */
+/* ============================== */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  padding: 30px 0 60px;
 }
 
-.home-container.light h1 {
-  color: #333;
-}
-
-.home-container.dark h1 {
-  color: #f9f9f9;
-}
-
-/* ============================== */
-/* 4. Paragraph Styles */
-/* ============================== */
-p {
-  font-size: 1.4rem;
-  font-weight: 300;
+/* 6.1 Headline Container */
+.headline-container {
   margin-bottom: 40px;
-  color: inherit;
-  line-height: 1.7;
-  text-align: center;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
 }
 
-.home-container.light p {
-  color: #666;
+.headline-container.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-.home-container.dark p {
-  color: #f9f9f9;
+.headline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+.brand-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* ============================== */
-/* 5. Create Room Button */
-/* ============================== */
+.version-tag {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #007bff;
+  margin-left: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background-color: rgba(0, 123, 255, 0.1);
+  position: relative;
+  top: -15px;
+}
+
+.home-container.dark .version-tag {
+  color: #bb86fc;
+  background-color: rgba(187, 134, 252, 0.1);
+}
+
+
+
+.headline-animation {
+  overflow: hidden;
+}
+
+.headline-welcome {
+  display: block;
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--text-light-secondary);
+  opacity: 0;
+  animation: slideUp 0.8s forwards;
+  animation-delay: 0.2s;
+}
+
+.headline-brand {
+  display: block;
+  font-size: 4.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-dark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0;
+  animation: slideUp 0.8s forwards;
+  animation-delay: 0.5s;
+  letter-spacing: -1px;
+}
+
+.home-container.dark .headline-welcome {
+  color: var(--text-dark-secondary);
+}
+
+.home-container.dark .headline-brand {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-dark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.headline-decoration {
+  width: 100px;
+  height: 12px;
+  margin: 10px auto 0;
+  opacity: 0;
+  animation: fadeIn 1s forwards;
+  animation-delay: 0.7s;
+}
+
+.decoration-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.decoration-path {
+  fill: none;
+  stroke: var(--primary-light);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: dash 1.5s forwards;
+  animation-delay: 0.8s;
+}
+
+.home-container.dark .decoration-path {
+  stroke: var(--secondary-light);
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 6.2 Tagline */
+.tagline {
+  font-size: 1.5rem;
+  font-weight: 300;
+  max-width: 700px;
+  margin: 0 auto 50px;
+  color: var(--text-light-secondary);
+  line-height: 1.6;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.tagline.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-container.dark .tagline {
+  color: var(--text-dark-secondary);
+}
+
+/* 6.3 CTA Container */
+.cta-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.cta-container.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 6.4 Create Room Button */
 .create-room-btn {
-  padding: 15px 35px;
-  background-color: #007bff;
+  position: relative;
+  padding: 0;
+  width: 260px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-dark) 100%);
+  border: none;
+  border-radius: var(--border-radius-large);
   color: white;
   font-size: 1.1rem;
   font-weight: 600;
-  border: none;
-  border-radius: 30px;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.2s ease-in-out, box-shadow 0.3s;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin-top: 30px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: 0 8px 20px rgba(0, 123, 255, 0.25);
+}
+
+.home-container.dark .create-room-btn {
+  background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-dark) 100%);
+  box-shadow: 0 8px 20px rgba(98, 0, 234, 0.25);
 }
 
 .create-room-btn:hover {
-  background-color: #0056b3;
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 25px rgba(0, 123, 255, 0.35);
+}
+
+.home-container.dark .create-room-btn:hover {
+  box-shadow: 0 12px 25px rgba(98, 0, 234, 0.35);
 }
 
 .create-room-btn:active {
-  transform: translateY(2px);
-  box-shadow: none;
+  transform: translateY(0);
 }
 
-/* ============================== */
-/* 6. Single Theme Toggle */
-/* ============================== */
-.theme-toggle {
+.btn-text {
+  margin-right: 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.btn-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+  transition: transform var(--transition-fast);
+}
+
+.btn-icon {
+  font-size: 14px;
+  transition: transform var(--transition-fast);
+}
+
+.create-room-btn:hover .btn-icon-container {
+  transform: translateX(3px);
+}
+
+.ripple {
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  transform: scale(0);
+  animation: ripple 0.6s linear;
+  z-index: 1;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* 6.5 Features */
+.cta-features {
   display: flex;
   justify-content: center;
-  margin-top: 30px;
+  gap: 40px;
+  margin-top: 60px;
 }
 
-.theme-btn {
-  background-color: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 2rem;
-  color: inherit;
-  transition: color 0.3s, transform 0.3s ease;
+.feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: transform var(--transition-fast);
 }
 
-.theme-btn:hover {
-  color: #007bff;
-  transform: scale(1.2);
+.feature:hover {
+  transform: translateY(-5px);
 }
 
-.theme-btn:focus {
-  outline: none;
+.feature i {
+  font-size: 1.5rem;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 123, 255, 0.1);
+  color: var(--primary-light);
+  border-radius: 50%;
+  margin-bottom: 10px;
+  transition: all var(--transition-fast);
+}
+
+.home-container.dark .feature i {
+  background-color: rgba(98, 0, 234, 0.1);
+  color: var(--secondary-light);
+}
+
+.feature:hover i {
+  transform: scale(1.1);
+  background-color: var(--primary-light);
+  color: white;
+}
+
+.home-container.dark .feature:hover i {
+  background-color: var(--secondary-light);
+}
+
+.feature span {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-light-secondary);
+}
+
+.home-container.dark .feature span {
+  color: var(--text-dark-secondary);
 }
 
 /* ============================== */
 /* 7. Footer */
 /* ============================== */
 .footer {
-  background-color: #f8f9fa;
-  padding: 30px 20px;
-  text-align: center;
-  margin-top: 50px;
-  border-radius: 15px;
+  width: 100%;
+  padding: 40px 0 20px;
+  margin-top: auto;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
 }
 
-.home-container.dark .footer {
-  background-color: #121212;
-  color: #fff;
+.footer.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .footer-content {
-  max-width: 900px;
-  margin: 0 auto;
-  font-size: 15px;
-  color: #555;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 40px;
+  margin-bottom: 30px;
+  position: relative;
 }
 
-.footer-content p {
-  margin: 10px 0;
+.footer-content::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
-.contact-link {
-  color: #E1306C;
+.home-container.dark .footer-content::before {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 7.1 Footer Branding */
+.footer-branding {
+  flex: 1 1 300px;
+}
+
+.footer-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--primary-light);
+}
+
+.home-container.dark .footer-title {
+  color: var(--secondary-light);
+}
+
+.footer-tagline {
+  font-size: 0.95rem;
+  color: var(--text-light-secondary);
+  max-width: 300px;
+  margin: 0;
+}
+
+.home-container.dark .footer-tagline {
+  color: var(--text-dark-secondary);
+}
+
+/* 7.2 Footer Links */
+.footer-links {
+  flex: 2 1 600px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 60px;
+}
+
+.footer-column {
+  flex: 0 1 auto;
+}
+
+.footer-column h4 {
+  font-size: 1.1rem;
   font-weight: 600;
+  margin: 0 0 20px;
+  color: var(--text-light-primary);
+}
+
+.home-container.dark .footer-column h4 {
+  color: var(--text-dark-primary);
+}
+
+.social-links {
+  display: flex;
+  gap: 15px;
+}
+
+.social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-light-secondary);
+  font-size: 1.2rem;
+  transition: all var(--transition-fast);
+}
+
+.home-container.dark .social-link {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-dark-secondary);
+}
+
+.social-link:hover {
+  transform: translateY(-3px);
+  background-color: var(--primary-light);
+  color: white;
+}
+
+.home-container.dark .social-link:hover {
+  background-color: var(--secondary-light);
+}
+
+.footer-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-nav li {
+  margin-bottom: 12px;
+}
+
+.footer-nav a {
+  color: var(--text-light-secondary);
   text-decoration: none;
-  transition: color 0.3s ease;
+  font-size: 0.95rem;
+  transition: color var(--transition-fast);
 }
 
-.contact-link:hover {
-  color: #C13584;
+.home-container.dark .footer-nav a {
+  color: var(--text-dark-secondary);
 }
 
-.contact-link .fa-instagram {
-  transition: transform 0.3s ease;
+.footer-nav a:hover {
+  color: var(--primary-light);
 }
 
-.contact-link:hover .fa-instagram {
-  transform: scale(1.2);
+.home-container.dark .footer-nav a:hover {
+  color: var(--secondary-light);
+}
+
+/* 7.3 Footer Bottom */
+.footer-bottom {
+  text-align: center;
+  padding-top: 20px;
+  position: relative;
+}
+
+.footer-bottom::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.home-container.dark .footer-bottom::before {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.footer-bottom p {
+  font-size: 0.9rem;
+  color: var(--text-light-secondary);
+  margin: 0;
+}
+
+.home-container.dark .footer-bottom p {
+  color: var(--text-dark-secondary);
 }
 
 /* ============================== */
-/* 8. Responsive Design */
+/* 8. Animations */
+/* ============================== */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.animate-on-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================== */
+/* 9. Responsive Design */
 /* ============================== */
 
-/* Medium Screens (769px - 992px) */
-@media (min-width: 769px) and (max-width: 992px) {
+/* Large Screens (992px - 1199px) */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .content-area {
+    padding: 20px;
+  }
+  
+  .headline-brand {
+    font-size: 4rem;
+  }
+  
+  .tagline {
+    font-size: 1.4rem;
+  }
+  
   .syncrolly-logo {
-    max-width: 200px;
-    max-height: 200px;
-  }
-
-  h1 {
-    font-size: 2.5rem;
-  }
-
-  p {
-    font-size: 1.2rem;
-  }
-
-  .create-room-btn {
-    padding: 12px 28px;
-    font-size: 1.1rem;
-  }
-
-  .footer-content {
-    font-size: 14px;
+    max-width: 160px;
+    max-height: 160px;
   }
 }
 
-/* Small Screens (Below 768px) */
-@media (max-width: 768px) {
-  .logo-container {
-    margin-bottom: 30px;
+/* Medium Screens (768px - 991px) */
+@media (min-width: 768px) and (max-width: 991px) {
+  .content-area {
+    padding: 20px;
   }
-
-  h1 {
-    font-size: 2rem;
+  
+  .headline-welcome {
+    font-size: 1.8rem;
   }
-
-  p {
-    font-size: 1.1rem;
+  
+  .headline-brand {
+    font-size: 3.5rem;
   }
-
-  .create-room-btn {
-    padding: 12px 30px;
-    font-size: 1.1rem;
+  
+  .tagline {
+    font-size: 1.3rem;
   }
-
-  .footer-content {
-    font-size: 14px;
-  }
-}
-
-/* Extra Small Screens (Below 480px) */
-@media (max-width: 480px) {
+  
   .syncrolly-logo {
     max-width: 150px;
     max-height: 150px;
   }
-
-  h1 {
-    font-size: 1.8rem;
+  
+  .footer-links {
+    gap: 30px;
   }
-
-  p {
-    font-size: 1rem;
+  
+  .toggle-label {
+    display: none;
   }
+}
 
-  .create-room-btn {
-    padding: 10px 25px;
-    font-size: 1rem;
+/* Small Screens (576px - 767px) */
+@media (max-width: 767px) {
+  .content-area {
+    padding: 15px;
   }
-
-  .theme-btn {
-    font-size: 1.6rem;
+  
+  .header {
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
   }
-
+  
+  .headline-welcome {
+    font-size: 1.5rem;
+  }
+  
+  .headline-brand {
+    font-size: 3rem;
+  }
+  
+  .tagline {
+    font-size: 1.2rem;
+    margin-bottom: 30px;
+  }
+  
+  .cta-features {
+    flex-wrap: wrap;
+    gap: 30px;
+  }
+  
+  .feature {
+    flex: 1 1 calc(50% - 15px);
+    min-width: 120px;
+  }
+  
   .footer-content {
-    font-size: 13px;
+    flex-direction: column;
+    gap: 30px;
+  }
+  
+  .footer-links {
+    flex-direction: column;
+    gap: 30px;
+  }
+  
+  .footer-branding {
+    text-align: center;
+  }
+  
+  .footer-tagline {
+    max-width: 100%;
+  }
+  
+  .social-links {
+    justify-content: center;
+  }
+  
+  .footer-column {
+    text-align: center;
+  }
+  
+  .footer-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* Extra Small Screens (Below 576px) */
+@media (max-width: 575px) {
+  .headline-welcome {
+    font-size: 1.3rem;
+  }
+  
+  .headline-brand {
+    font-size: 2.5rem;
+  }
+  
+  .tagline {
+    font-size: 1.1rem;
+  }
+  
+  .syncrolly-logo {
+    max-width: 130px;
+    max-height: 130px;
+  }
+  
+  .create-room-btn {
+    width: 230px;
+    height: 50px;
+    font-size: 1rem;
+  }
+  
+  .cta-features {
+    flex-direction: column;
+    gap: 25px;
+  }
+  
+  .feature {
+    width: 100%;
+  }
+  
+  .feature i {
+    width: 45px;
+    height: 45px;
+    font-size: 1.3rem;
+  }
+  
+  .toggle-label {
+    display: none;
+  }
+  
+  .orb1, .orb2, .orb3 {
+    filter: blur(60px);
   }
 }

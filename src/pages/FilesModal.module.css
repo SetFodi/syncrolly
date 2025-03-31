@@ -1,104 +1,227 @@
 /* ============================== */
 /* 1. Overlay */
+/* ============================== */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.7); /* Dark background with transparency */
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(8px); /* Soft background blur */
-  transition: opacity 0.3s ease-out;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ============================== */
 /* 2. Modal Container */
+/* ============================== */
 .modal-content {
-  background: linear-gradient(145deg, #ffffff, #f7f7f7);
+  background: linear-gradient(135deg, #ffffff, #f8f9fa);
   padding: 35px;
-  border-radius: 16px;
+  border-radius: 20px;
   width: 600px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.2);
   position: relative;
-  font-family: 'Roboto', sans-serif;
-  transition: transform 0.3s ease-out;
+  font-family: 'Poppins', sans-serif;
+  animation: slideUp 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(30px); 
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0); 
+  }
+}
+
+/* Custom scrollbar for the modal */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 
 /* ============================== */
 /* 3. Close Button */
+/* ============================== */
 .close-btn {
   position: absolute;
-  top: 15px;
-  right: 15px;
-  background: transparent;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.05);
   border: none;
-  font-size: 28px;
-  color: #333;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #4a5568;
   cursor: pointer;
-  transition: color 0.3s ease, transform 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .close-btn:hover {
-  color: #dc3545;
-  transform: scale(1.1);
+  background-color: #fee2e2;
+  color: #e53e3e;
+  transform: rotate(90deg);
+}
+
+.close-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.3);
 }
 
 /* ============================== */
 /* 4. Title */
+/* ============================== */
 .modal-content h2 {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  margin-bottom: 20px;
-  color: #333;
+  margin-bottom: 25px;
+  color: #2d3748;
   text-align: center;
   letter-spacing: 0.5px;
+  position: relative;
+  padding-bottom: 15px;
+}
+
+.modal-content h2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #3182ce, #63b3ed);
+  border-radius: 3px;
 }
 
 /* ============================== */
-/* 5. File Upload Section */
+/* 5. Upload Section */
+/* ============================== */
 .upload-section {
   display: flex;
   flex-direction: column;
   margin-bottom: 30px;
-  gap: 12px;
+  padding: 25px;
+  background-color: #f7fafc;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e0;
   text-align: center;
+}
+
+.upload-section p {
+  margin-bottom: 20px;
+  color: #4a5568;
+  font-size: 15px;
+}
+
+.upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.file-select-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.file-name {
+  font-size: 14px;
+  color: #718096;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 5px 10px;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
 }
 
 .file-upload-btn,
 .file-upload-submit {
-  padding: 14px 24px;
-  background-color: #007bff;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #3182ce, #2b6cb0);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 50px;
   cursor: pointer;
   font-size: 16px;
-  transition: background-color 0.3s, transform 0.3s ease-out;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(49, 130, 206, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .file-upload-submit {
-  margin-left: 15px;
-  background-color: #28a745;
+  background: linear-gradient(135deg, #38a169, #2f855a);
+  box-shadow: 0 4px 10px rgba(56, 161, 105, 0.25);
 }
 
-.file-upload-btn:hover,
-.file-upload-submit:hover {
-  background-color: #0056b3;
-  transform: translateY(-3px);
+.file-upload-btn:hover {
+  background: linear-gradient(135deg, #2b6cb0, #2c5282);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(49, 130, 206, 0.35);
 }
 
 .file-upload-submit:hover {
-  background-color: #218838;
+  background: linear-gradient(135deg, #2f855a, #276749);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(56, 161, 105, 0.35);
+}
+
+.file-upload-btn:active,
+.file-upload-submit:active {
+  transform: translateY(0);
+}
+
+.file-upload-submit:disabled {
+  background: linear-gradient(135deg, #a0aec0, #718096);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ============================== */
 /* 6. Files List Section */
+/* ============================== */
 .files-list {
   margin-top: 20px;
 }
@@ -106,81 +229,198 @@
 .files-list h3 {
   font-size: 20px;
   font-weight: 600;
-  color: #555;
+  color: #4a5568;
+  margin-bottom: 20px;
+  text-align: left;
+  position: relative;
+  padding-left: 15px;
+}
+
+.files-list h3::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(to bottom, #3182ce, #63b3ed);
+  border-radius: 2px;
+}
+
+.no-files {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background-color: #f7fafc;
+  border-radius: 12px;
+  color: #a0aec0;
+}
+
+.no-files i {
+  font-size: 48px;
   margin-bottom: 15px;
-  text-align: center;
+}
+
+.no-files p {
+  font-size: 16px;
 }
 
 /* ============================== */
 /* 7. Individual File Items */
+/* ============================== */
 .file-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #f9f9f9;
-  padding: 14px 20px;
-  border-radius: 10px;
+  background-color: white;
+  padding: 16px 20px;
+  border-radius: 12px;
   margin-bottom: 15px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-  transition: background-color 0.3s, box-shadow 0.3s, transform 0.2s;
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
 }
 
 .file-item:hover {
-  background-color: #e7f1ff;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-  transform: translateX(2px);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e0;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 80%;
+}
+
+.file-info i {
+  font-size: 20px;
+  color: #3182ce;
 }
 
 /* ============================== */
 /* 8. File Name */
+/* ============================== */
 .file-item a {
   text-decoration: none;
-  color: #007bff;
+  color: #2d3748;
   font-weight: 500;
   font-size: 16px;
-  transition: color 0.2s ease-in-out;
+  transition: color 0.2s ease;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-item a:hover {
-  text-decoration: underline;
-  color: #0056b3;
+  color: #3182ce;
 }
 
 /* ============================== */
 /* 9. Delete Button */
+/* ============================== */
 .delete-btn {
-  background-color: #dc3545;
-  color: white;
+  background-color: transparent;
+  color: #718096;
   border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.2s ease-out;
+  transition: all 0.3s ease;
+  font-size: 16px;
 }
 
 .delete-btn:hover {
-  background-color: #b02a37;
-  transform: scale(1.05);
+  background-color: #fee2e2;
+  color: #e53e3e;
+}
+
+.delete-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.3);
 }
 
 /* ============================== */
 /* 10. Responsive Adjustments */
+/* ============================== */
 @media (max-width: 768px) {
   .modal-content {
     width: 90%;
-    padding: 20px;
+    padding: 25px 20px;
   }
-
+  
+  .modal-content h2 {
+    font-size: 24px;
+  }
+  
+  .upload-section {
+    padding: 20px 15px;
+  }
+  
   .file-upload-btn,
   .file-upload-submit {
-    padding: 12px 18px;
+    padding: 10px 20px;
+    font-size: 14px;
   }
-
+  
+  .files-list h3 {
+    font-size: 18px;
+  }
+  
   .file-item {
-    padding: 12px 18px;
+    padding: 12px 15px;
   }
+  
+  .file-info i {
+    font-size: 18px;
+  }
+  
+  .file-item a {
+    font-size: 14px;
+  }
+}
 
+@media (max-width: 480px) {
+  .modal-content {
+    padding: 20px 15px;
+  }
+  
   .modal-content h2 {
-    font-size: 22px;
+    font-size: 20px;
+  }
+  
+  .upload-controls {
+    flex-direction: column;
+  }
+  
+  .file-upload-btn,
+  .file-upload-submit {
+    width: 100%;
+  }
+  
+  .file-info {
+    gap: 8px;
+  }
+  
+  .delete-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .close-btn {
+    top: 15px;
+    right: 15px;
+    width: 32px;
+    height: 32px;
   }
 }
