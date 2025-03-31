@@ -1177,7 +1177,7 @@ html, body {
 }
 
 .room-container.light :global(.cm-selectionBackground) {
-  background-color: rgba(66, 153, 225, 0.25) !important;
+  background-color: rgba(66, 153, 225, 0.4) !important; /* Increased opacity */
 }
 
 .room-container.light :global(.cm-gutters) {
@@ -1186,7 +1186,13 @@ html, body {
   border-right: 1px solid #e2e8f7 !important;
   padding-right: 5px !important;
 }
+.room-container.light :global(.cm-activeLine.cm-line .cm-selectionBackground) {
+  background-color: rgba(56, 143, 215, 0.5) !important; /* Slightly darker blue with higher opacity */
+}
 
+.room-container.dark :global(.cm-activeLine.cm-line .cm-selectionBackground) {
+  background-color: rgba(134, 195, 234, 0.5) !important; /* Slightly lighter blue with higher opacity */
+}
 .room-container.light :global(.cm-lineNumbers) {
   color: #718096 !important;
 }
@@ -1249,8 +1255,9 @@ html, body {
 }
 
 .room-container.dark :global(.cm-selectionBackground) {
-  background-color: rgba(144, 205, 244, 0.25) !important;
+  background-color: rgba(144, 205, 244, 0.4) !important; /* Increased opacity */
 }
+
 
 .room-container.dark :global(.cm-gutters) {
   background-color: #2d3748 !important;
