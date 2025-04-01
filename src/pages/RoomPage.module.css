@@ -9,7 +9,42 @@ html, body {
   overflow-x: hidden;
   font-family: 'Poppins', sans-serif;
 }
+/* Fix for selection visibility across multiple lines */
+.room-container :global(.cm-line .cm-selectionBackground) {
+  background-color: #3182ce !important;
+  opacity: 0.7 !important;
+  border-radius: 0 !important; /* Remove border radius for continuous selection */
+  position: relative !important; /* Ensure proper stacking */
+  z-index: 10 !important; /* Higher than active line highlight */
+}
 
+/* Special fix for first line selection visibility */
+.room-container :global(.cm-line:first-of-type .cm-selectionBackground),
+.room-container :global(.cm-line:first-child .cm-selectionBackground) {
+  background-color: #3182ce !important;
+  opacity: 0.7 !important;
+  display: inline-block !important; /* Force display */
+  z-index: 20 !important; /* Even higher z-index for first line */
+}
+
+/* Ensure consistent selection appearance across lines */
+.room-container :global(.cm-scroller .cm-selectionBackground) {
+  background-color: #3182ce !important;
+  mix-blend-mode: multiply !important; /* Help with visibility across backgrounds */
+}
+
+/* Reset any special styling for the active line when it's also selected */
+.room-container :global(.cm-activeLine .cm-selectionBackground) {
+  background-color: #3182ce !important; /* Same color as other selections */
+  opacity: 0.7 !important;
+  border-left: none !important; /* Remove any special active line styling */
+}
+
+/* Force visibility of selected areas even with syntax highlighting */
+.room-container :global(.cm-selectionBackground *) {
+  background-color: transparent !important; /* Let parent background show through */
+  color: white !important; /* High contrast text color */
+}
 .room-container {
   display: flex;
   flex-direction: column;
