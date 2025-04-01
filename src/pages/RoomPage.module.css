@@ -11,11 +11,9 @@ html, body {
 }
 /* Fix for selection visibility across multiple lines */
 .room-container :global(.cm-line .cm-selectionBackground) {
+  display: inline-block !important;
   background-color: #3182ce !important;
   opacity: 0.7 !important;
-  border-radius: 0 !important; /* Remove border radius for continuous selection */
-  position: relative !important; /* Ensure proper stacking */
-  z-index: 10 !important; /* Higher than active line highlight */
 }
 
 /* Special fix for first line selection visibility */
@@ -26,7 +24,20 @@ html, body {
   display: inline-block !important; /* Force display */
   z-index: 20 !important; /* Even higher z-index for first line */
 }
-
+.room-container :global(.cm-line:last-of-type .cm-selectionBackground),
+.room-container :global(.cm-line:last-child .cm-selectionBackground) {
+  background-color: #3182ce !important;
+  opacity: 0.7 !important;
+  display: inline-block !important;
+  z-index: 20 !important;
+  position: relative !important;
+  width: 100% !important;
+}
+.room-container :global(.cm-line:empty .cm-selectionBackground) {
+  min-width: 100% !important;
+  display: block !important;
+  height: 1.5em !important;
+}
 /* Ensure consistent selection appearance across lines */
 .room-container :global(.cm-scroller .cm-selectionBackground) {
   background-color: #3182ce !important;
@@ -1304,7 +1315,10 @@ html, body {
 .room-container.dark :global(.cm-lineNumbers) {
   color: #a0aec0 !important;
 }
-
+.room-container.dark :global(.cm-line:last-of-type .cm-selectionBackground),
+.room-container.dark :global(.cm-line:last-child .cm-selectionBackground) {
+  background-color: #90cdf4 !important;
+}
 .room-container.dark :global(.cm-foldedText) {
   background-color: #2d3748 !important;
   color: #e2e8f0 !important;
