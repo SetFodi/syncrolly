@@ -67,15 +67,17 @@ async function loadDocument(roomName) {
       ydoc.getText('shared-text');
     }
 
-    // Ensure the room document exists in MongoDB with necessary fields
+    // Inside loadDocument function:
     await roomsCollection.updateOne(
       { roomId: roomName },
       {
-        $setOnInsert: { text: '', lastActivity: new Date() }, // Set only on insert
-        $set: { lastActivity: new Date() }, // Always update lastActivity
+        $setOnInsert: { text: '' }, // Only set 'text' on insert
+        $set: { lastActivity: new Date() }, // Always update 'lastActivity'
       },
       { upsert: true },
     );
+
+
 
     return ydoc;
   } catch (err) {
