@@ -1,6 +1,7 @@
+// homepage.js
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './HomePage.module.css';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom'; // Ensure Link is imported
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
 function HomePage({ onCreateRoom }) {
@@ -102,6 +103,7 @@ function HomePage({ onCreateRoom }) {
     >
       {/* Animated background elements */}
       <div className={`${styles['background-container']} ${animateBackground ? styles.animate : ''}`}>
+        {/* ... Orbs and Grid Overlay ... */}
         <div className={styles['gradient-orbs']}>
           <div 
             className={`${styles.orb} ${styles.orb1}`}
@@ -116,7 +118,6 @@ function HomePage({ onCreateRoom }) {
             style={getParallaxStyle(-15)}
           ></div>
         </div>
-        
         <div className={styles['grid-overlay']}></div>
       </div>
       
@@ -133,6 +134,15 @@ function HomePage({ onCreateRoom }) {
               />
             </Link>
           </div>
+
+          {/* --- ADDED NAVIGATION --- */}
+          <nav className={styles.navigation}>
+            <Link to="/" className={`${styles.navLink} ${styles.active}`}>Home</Link> 
+            {/* Added active class for Home */}
+            <Link to="/about" className={styles.navLink}>About</Link>
+            <Link to="/contact" className={styles.navLink}>Contact</Link>
+          </nav>
+          {/* --- END ADDED NAVIGATION --- */}
           
           <div className={styles['theme-toggle-container']}>
             <button
@@ -140,6 +150,7 @@ function HomePage({ onCreateRoom }) {
               className={styles['theme-toggle']}
               aria-label="Toggle Theme"
             >
+              {/* ... Theme toggle content ... */}
               <div className={styles['toggle-track']}>
                 <div className={`${styles['toggle-thumb']} ${isDarkMode ? styles.active : ''}`}>
                   <i className={isDarkMode ? "fas fa-moon" : "fas fa-sun"}></i>
@@ -152,63 +163,65 @@ function HomePage({ onCreateRoom }) {
           </div>
         </header>
         
+        {/* Main content remains the same */}
         <main className={styles.main}>
-  <div className={`${styles['headline-container']} ${isLoaded ? styles.visible : ''}`}>
-    <h1 className={styles.headline}>
-      <div className={styles['headline-animation']}>
-        <span className={styles['headline-welcome']}>Welcome to</span>
-      </div>
-      <div className={styles['headline-animation']} style={{ animationDelay: '0.3s' }}>
-        <div className={styles['brand-container']}>
-          <span className={styles['headline-brand']}>Syncrolly</span>
-          <span className={styles['version-tag']}>2.0</span>
-        </div>
-      </div>
-    </h1>
-    
-    <div className={styles['headline-decoration']}>
-      <svg width="100" height="12" viewBox="0 0 100 12" className={styles['decoration-svg']}>
-        <path d="M0,6 C30,0 70,0 100,6" className={styles['decoration-path']} />
-      </svg>
-    </div>
-  </div>
-  
-  <p className={`${styles.tagline} ${isLoaded ? styles.visible : ''}`} style={{ animationDelay: '0.6s' }}>
-    Collaborate and share in real-time with unparalleled ease
-  </p>
-  
-  <div className={`${styles['cta-container']} ${isLoaded ? styles.visible : ''}`} style={{ animationDelay: '0.9s' }}>
-    <button 
-      ref={roomBtnRef}
-      onClick={(e) => {
-        createRipple(e);
-        onCreateRoom();
-      }} 
-      className={styles['create-room-btn']}
-    >
-      <span className={styles['btn-text']}>Create or Join a Room</span>
-      <span className={styles['btn-icon-container']}>
-        <i className={`fas fa-arrow-right ${styles['btn-icon']}`}></i>
-      </span>
-    </button>
-    
-    <div className={styles['cta-features']}>
-      <div className={styles.feature}>
-        <i className="fas fa-bolt"></i>
-        <span>Instant Connection</span>
-      </div>
-      <div className={styles.feature}>
-        <i className="fas fa-shield-alt"></i>
-        <span>Secure Sharing</span>
-      </div>
-      <div className={styles.feature}>
-        <i className="fas fa-sync-alt"></i>
-        <span>Real-time Sync</span>
-      </div>
-    </div>
-  </div>
-</main>
-{/* Footer */}
+          {/* ... Headline, Tagline, CTA ... */}
+          <div className={`${styles['headline-container']} ${isLoaded ? styles.visible : ''}`}>
+            {/* ... Headline content ... */}
+            <h1 className={styles.headline}>
+              <div className={styles['headline-animation']}>
+                <span className={styles['headline-welcome']}>Welcome to</span>
+              </div>
+              <div className={styles['headline-animation']} style={{ animationDelay: '0.3s' }}>
+                <div className={styles['brand-container']}>
+                  <span className={styles['headline-brand']}>Syncrolly</span>
+                  <span className={styles['version-tag']}>2.0</span>
+                </div>
+              </div>
+            </h1>
+            <div className={styles['headline-decoration']}>
+              <svg width="100" height="12" viewBox="0 0 100 12" className={styles['decoration-svg']}>
+                <path d="M0,6 C30,0 70,0 100,6" className={styles['decoration-path']} />
+              </svg>
+            </div>
+          </div>
+          <p className={`${styles.tagline} ${isLoaded ? styles.visible : ''}`} style={{ animationDelay: '0.6s' }}>
+            Collaborate and share in real-time with unparalleled ease
+          </p>
+          <div className={`${styles['cta-container']} ${isLoaded ? styles.visible : ''}`} style={{ animationDelay: '0.9s' }}>
+            <button 
+              ref={roomBtnRef}
+              onClick={(e) => {
+                createRipple(e);
+                onCreateRoom();
+              }} 
+              className={styles['create-room-btn']}
+            >
+              {/* ... Button content ... */}
+              <span className={styles['btn-text']}>Create or Join a Room</span>
+              <span className={styles['btn-icon-container']}>
+                <i className={`fas fa-arrow-right ${styles['btn-icon']}`}></i>
+              </span>
+            </button>
+            <div className={styles['cta-features']}>
+              {/* ... Features ... */}
+              <div className={styles.feature}>
+                <i className="fas fa-bolt"></i>
+                <span>Instant Connection</span>
+              </div>
+              <div className={styles.feature}>
+                <i className="fas fa-shield-alt"></i>
+                <span>Secure Sharing</span>
+              </div>
+              <div className={styles.feature}>
+                <i className="fas fa-sync-alt"></i>
+                <span>Real-time Sync</span>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {/* Footer */}
         <footer className={`${styles.footer} ${isLoaded ? styles.visible : ''}`} style={{ animationDelay: '1.2s' }}>
           <div className={styles['footer-content']}>
             <div className={styles['footer-branding']}>
@@ -217,9 +230,26 @@ function HomePage({ onCreateRoom }) {
             </div>
             
             <div className={styles['footer-links']}>
+              {/* --- UPDATED FOOTER COLUMN for Quick Links --- */}
+              <div className={styles['footer-column']}>
+                <h4>Quick Links</h4> 
+                {/* Changed from "Company" */}
+                <ul className={styles['footer-nav']}>
+                  <li><Link to="/">Home</Link></li> 
+                  {/* Added Home Link */}
+                  <li><Link to="/about">About</Link></li> 
+                  {/* Changed <a> to <Link> */}
+                  <li><Link to="/contact">Contact</Link></li> 
+                  {/* Changed <a> to <Link> */}
+                </ul>
+              </div>
+              {/* --- END UPDATED FOOTER COLUMN --- */}
+
+              {/* Connect With Us column remains */}
               <div className={styles['footer-column']}>
                 <h4>Connect With Us</h4>
                 <div className={styles['social-links']}>
+                  {/* ... Social Links ... */}
                   <a 
                     href="https://www.instagram.com/syncrolly/" 
                     target="_blank" 
@@ -229,26 +259,18 @@ function HomePage({ onCreateRoom }) {
                     <i className="fab fa-instagram"></i>
                   </a>
                   <a 
-                    href="https://www.linkedin.com/in/luka-partenadze-394675348/" target='_blank' 
+                    href="https://www.linkedin.com/in/luka-partenadze-394675348/" target='_blank' rel="noopener noreferrer"
                     className={styles['social-link']}
                   >
                     <i className="fab fa-linkedin-in"></i>
                   </a>
                   <a 
-                    href="https://github.com/SetFodi" target='_blank'
+                    href="https://github.com/SetFodi" target='_blank' rel="noopener noreferrer"
                     className={styles['social-link']}
                   >
                     <i className="fab fa-github"></i>
                   </a>
                 </div>
-              </div>
-              
-              <div className={styles['footer-column']}>
-                <h4>Company</h4>
-                <ul className={styles['footer-nav']}>
-                  <li><a href="#">About Us</a></li>
-                  <li><a href="#">Contact</a></li>
-                </ul>
               </div>
             </div>
           </div>
