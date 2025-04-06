@@ -16,7 +16,7 @@ function RoomCreationModal({ onClose, showModal }) {
       alert('Please enter your name!');
       return;
     }
-    // Generate a random room name if the user doesn't specify one
+    // a random room name if the user doesn't specify one
     const generatedRoomName = roomName || Math.random().toString(36).substring(2, 9);
     localStorage.setItem('userName', userName);
     const isCreator = true; // Mark the user as the room creator
