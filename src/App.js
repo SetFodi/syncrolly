@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import RoomPage from './pages/RoomPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
 import './App.css';
 
 // Modal for creating a room
@@ -30,7 +32,7 @@ function RoomCreationModal({ onClose, showModal }) {
     setUserName('');
     onClose();
   };
-
+  
   return (
     <div className={`modal-overlay ${showModal ? 'show' : ''}`}>
       <div className={`modal-content ${showModal ? 'show' : ''}`}>
@@ -49,7 +51,6 @@ function RoomCreationModal({ onClose, showModal }) {
           />
           <label className="input-label">Your Name</label>
         </div>
-
         <div className="input-group">
           <input
             type="text"
@@ -60,7 +61,6 @@ function RoomCreationModal({ onClose, showModal }) {
           />
           <label className="input-label">Room Name (optional)</label>
         </div>
-
         <div className="modal-buttons">
           <button onClick={handleCreateRoom} className="modal-btn join-btn">
             <span>Join Room</span>
@@ -101,6 +101,10 @@ function App() {
         />
         {/* Room page where the room content is displayed */}
         <Route path="/room/:roomId" element={<RoomPage />} />
+        {/* New About/Tutorial page */}
+        <Route path="/about" element={<AboutPage />} />
+        {/* New Contact page */}
+        <Route path="/contact" element={<ContactPage />} />
       </Routes>
     </Router>
   );
