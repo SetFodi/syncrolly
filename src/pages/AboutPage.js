@@ -226,9 +226,6 @@ function AboutPage() {
                 <div className={styles['step-content']}>
                   <h3>Create or Join a Room</h3>
                   <p>From the homepage, click "Create or Join a Room". Enter your name and optionally specify a room name. If you don't specify a room name, a random one will be generated for you.</p>
-                  <div className={styles['step-image']}>
-                    <img src={require('../assets/tutorial-create-room.png')} alt="Create Room Modal" />
-                  </div>
                 </div>
               </div>
               
