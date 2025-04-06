@@ -198,7 +198,30 @@
   transform: translateY(-20px);
   transition: opacity 0.8s ease, transform 0.8s ease;
 }
+.navigation {
+  display: flex; /* Arrange nav links horizontally */
+  gap: 25px; /* Space between the nav links (adjust as needed) */
+  margin: 0 auto; /* Helps center nav between logo and toggle */
+}
+.navLink {
+  color: var(--text-color); /* Use your theme's text color variable */
+  text-decoration: none; /* Remove default underline */
+  font-weight: 500; /* Standard weight for nav links */
+  padding: 8px 0; /* Vertical padding, horizontal spacing via gap */
+  position: relative; /* Needed for potential pseudo-elements or positioning */
+  transition: color 0.3s ease; /* Smooth color transition on hover */
+  border-bottom: 2px solid transparent; /* Invisible border for active state */
+}
+.navLink:hover {
+  color: var(--primary-color); /* Use your theme's primary color variable */
+}
 
+/* Styles for the currently active navigation link */
+.navLink.active {
+  color: var(--primary-color); /* Use your theme's primary color variable */
+  font-weight: 700; /* Make the active link bolder */
+  border-bottom-color: var(--primary-color); /* Show the underline */
+}
 .header.visible {
   opacity: 1;
   transform: translateY(0);
