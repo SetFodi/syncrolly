@@ -17,7 +17,7 @@ import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
 import { php } from '@codemirror/lang-php';
 import { debounce } from 'lodash';
-
+import LoadingScreen from '../components/LoadingScreen';
 function RoomPageContent() {
   const { roomId } = useParams();
   const location = useLocation();
@@ -91,64 +91,70 @@ const retryWithTimeout = async (operation, maxAttempts = 5, initialDelay = 1000)
   const { ydoc, awareness, isYjsSynced } = useYjs();
 
   // Initialize Socket.IO Events
-useEffect(() => {
-  if (isNameSet && ydoc) {
-    setLoading(true);
-    setConnectionStatus('connecting');
-    console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
-
-    const joinRoom = async () => {
-      const result = await retryWithTimeout(
-        () => new Promise((resolve, reject) => {
-          socket.emit('join_room', 
-            { roomId, userName: storedUserName, userId: storedUserId, isCreator }, 
-            (response) => {
-              if (response.error) {
-                reject(response.error);
-              } else {
-                resolve(response);
+  useEffect(() => {
+    if (isNameSet && ydoc) {
+      setLoading(true);
+      setConnectionStatus('connecting');
+      console.log('Attempting to join room with:', { roomId, userName: storedUserName, userId: storedUserId, isCreator });
+  
+      const joinRoom = async () => {
+        const result = await retryWithTimeout(
+          () => new Promise((resolve, reject) => {
+            socket.emit('join_room', 
+              { roomId, userName: storedUserName, userId: storedUserId, isCreator }, 
+              (response) => {
+                if (response.error) {
+                  reject(response.error);
+                } else {
+                  resolve(response);
+                }
               }
-            }
-          );
-        }),
-        5, // max attempts
-        1000 // initial delay
-      );
-
-      if (result.success) {
-        console.log('Joined room successfully:', result.data);
-        setFiles(result.data.files);
-        setMessages(result.data.messages);
-        setIsEditable(result.data.isEditable);
-        setIsCreator(result.data.isCreator);
-        setConnectionStatus('connected');
-        setLoading(false);
-      } else {
-        setConnectionStatus('failed');
-        setLoading(false);
-        alert('Failed to connect to the room. The server might be waking up. Please try again in a moment.');
-      }
-    };
-
-    joinRoom();
-
-      // Listen for editability changes
+            );
+          }),
+          5, // max attempts
+          1000 // initial delay
+        );
+  
+        if (result.success) {
+          console.log('Joined room successfully:', result.data);
+          setFiles(result.data.files);
+          setMessages(result.data.messages);
+          setIsEditable(result.data.isEditable);
+          setIsCreator(result.data.isCreator);
+          setConnectionStatus('connected');
+          
+          // Don't set loading to false here anymore
+          // We'll wait for both socket AND Yjs to be ready
+          // setLoading(false); - Remove this line
+          
+          // Add logging
+          console.log('Socket.io connection established, waiting for Yjs sync...');
+        } else {
+          setConnectionStatus('failed');
+          setLoading(false);
+          alert('Failed to connect to the room. The server might be waking up. Please try again in a moment.');
+        }
+      };
+  
+      joinRoom();
+  
+      // All the socket event listeners remain unchanged
       socket.on('editable_state_changed', ({ isEditable: newIsEditable }) => {
         console.log(`Editability changed to: ${newIsEditable}`);
         setIsEditable(newIsEditable);
       });
-
+  
       // Listen for new messages
       socket.on('receive_message', (message) => {
         console.log('Received message:', message);
         setMessages((prevMessages) => [...prevMessages, message]);
-
+  
         // If chat is not visible, set unread messages flag
         if (!chatVisible) {
           setHasUnreadMessages(true);
         }
       });
-
+  
       // Listen for typing indicators
       socket.on('user_typing', ({ userId, userName }) => {
         console.log(`${userName} is typing...`);
@@ -159,12 +165,12 @@ useEffect(() => {
           return prevTypingUsers;
         });
       });
-
+  
       socket.on('user_stopped_typing', ({ userId }) => {
         console.log(`User ${userId} stopped typing.`);
         setTypingUsers((prevTypingUsers) => prevTypingUsers.filter(user => user.userId !== userId));
       });
-
+  
       socket.on('room_deleted', ({ message, deleteAfter }) => {
         if (deleteAfter && new Date() > new Date(deleteAfter)) {
           alert(message);
@@ -175,7 +181,7 @@ useEffect(() => {
           alert(message);
         }
       });
-
+  
       return () => {
         socket.off('new_file');
         socket.off('receive_message');
@@ -189,7 +195,22 @@ useEffect(() => {
       };
     }
   }, [isNameSet, roomId, storedUserName, storedUserId, isCreator, navigate, chatVisible, ydoc]);
-
+  
+  // NEW SEPARATE EFFECT: Check if both systems are ready
+  useEffect(() => {
+    // Only run this check when we're trying to connect
+    if (isNameSet && ydoc && loading) {
+      // Add this logging to debug connection status
+      console.log('Connection status check - Socket connected:', connectionStatus === 'connected');
+      console.log('Connection status check - Yjs synced:', isYjsSynced);
+      
+      // When both are ready, set loading to false
+      if (connectionStatus === 'connected' && isYjsSynced) {
+        setLoading(false);
+        console.log('All systems ready! Both socket.io and Yjs are connected.');
+      }
+    }
+  }, [isNameSet, connectionStatus, isYjsSynced, ydoc, loading]);
   // Handle room joined event
 useEffect(() => {
   const handleRoomJoined = async (roomData) => {
@@ -547,6 +568,13 @@ useEffect(() => {
         </div>
       ) : (
         <>
+        {/* Add the LoadingScreen at the beginning of this section */}
+    {(connectionStatus !== 'connected' || !isYjsSynced) && (
+      <LoadingScreen 
+        connectionStatus={connectionStatus} 
+        syncTimeout={syncTimeout}
+      />
+    )}
           <div className={styles['header']}>
             <div className={styles['logo-container']}>
               <Link to="/">

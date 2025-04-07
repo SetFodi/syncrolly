@@ -1,0 +1,451 @@
+/* frontend/src/components/LoadingScreen.module.css */
+
+.loadingContainer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #121212 0%, #2d3748 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    color: white;
+    overflow: hidden;
+  }
+  
+  .loadingContainer::before {
+    content: '';
+    position: absolute;
+    width: 300%;
+    height: 300%;
+    background-image: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 30px 30px;
+    top: -100%;
+    left: -100%;
+    animation: gridMove 120s linear infinite;
+    opacity: 0.5;
+  }
+  
+  @keyframes gridMove {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .loadingContent {
+    max-width: 650px;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    position: relative;
+    z-index: 2;
+  }
+  
+  .logoContainer {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+  }
+  
+  .loadingLogo {
+    width: 70px;
+    height: 70px;
+    border-radius: 15px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  
+  .loadingTitle {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0;
+    background: linear-gradient(90deg, #3182ce, #90cdf4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    position: relative;
+  }
+  
+  .loadingTitle::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, #3182ce, #90cdf4);
+    transform-origin: left;
+    animation: lineWidth 2.5s ease-in-out infinite;
+  }
+  
+  @keyframes lineWidth {
+    0%, 100% { transform: scaleX(0.5); opacity: 0.5; }
+    50% { transform: scaleX(1); opacity: 1; }
+  }
+  
+  .animationContainer {
+    width: 100%;
+    height: 180px;
+    position: relative;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  .serverWakeup {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    position: relative;
+  }
+  
+  .server {
+    width: 80px;
+    height: 130px;
+    background: #1a202c;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    opacity: 0.5;
+    transform: scale(0.8);
+    transition: all 0.8s cubic-bezier(0.165, 0.84, 0.44, 1);
+  }
+  
+  .server.active {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(49, 130, 206, 0.4);
+  }
+  
+  .serverLights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    padding: 10px;
+  }
+  
+  .light {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #48bb78;
+    animation: blink 2s infinite alternate;
+  }
+  
+  .server:not(.active) .light {
+    background-color: #718096;
+    animation: none;
+  }
+  
+  .light:nth-child(2n) {
+    animation-delay: 0.5s;
+  }
+  
+  .light:nth-child(3n) {
+    animation-delay: 0.8s;
+  }
+  
+  @keyframes blink {
+    0%, 80% { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+  
+  .yjsConnection {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  
+  .yjsConnection.active {
+    opacity: 1;
+  }
+  
+  .dataPacket {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #3182ce;
+    animation: movePacket 4s linear infinite;
+    animation-fill-mode: both;
+    box-shadow: 0 0 10px #3182ce;
+  }
+  
+  .dataPacket:nth-child(1) {
+    animation-delay: 0s;
+  }
+  
+  .dataPacket:nth-child(2) {
+    animation-delay: 1.3s;
+  }
+  
+  .dataPacket:nth-child(3) {
+    animation-delay: 2.6s;
+  }
+  
+  @keyframes movePacket {
+    0% {
+      left: 25%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      scale: 0.5;
+    }
+    20% {
+      opacity: 1;
+      scale: 1;
+    }
+    50% {
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+    80% {
+      opacity: 1;
+      scale: 1;
+    }
+    100% {
+      left: 75%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0;
+      scale: 0.5;
+    }
+  }
+  
+  .loadingStatus {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .loadingBar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  
+  .loadingProgress {
+    height: 100%;
+    width: 25%;
+    background: linear-gradient(90deg, #3182ce, #90cdf4);
+    border-radius: 20px;
+    transition: width 1s cubic-bezier(0.165, 0.84, 0.44, 1);
+  }
+  
+  .loadingMessage {
+    font-size: 1rem;
+    margin: 0;
+    text-align: center;
+    color: #e2e8f0;
+  }
+  
+  .infoBox, .syncrollyTip {
+    width: 100%;
+    padding: 15px 20px;
+    background: rgba(25, 35, 55, 0.8);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  .infoBox h3, .syncrollyTip h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+    color: #90cdf4;
+  }
+  
+  .factText {
+    margin: 0;
+    line-height: 1.5;
+    font-size: 0.95rem;
+    animation: fadeText 8s ease infinite;
+  }
+  
+  @keyframes fadeText {
+    0%, 10% { opacity: 0.5; }
+    20%, 90% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+  
+  .syncTimeoutNotice {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(229, 62, 62, 0.1);
+    border-left: 3px solid #e53e3e;
+    border-radius: 4px;
+  }
+  
+  .syncTimeoutNotice p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #fc8181;
+  }
+  
+  .syncrollyTip {
+    background: rgba(49, 130, 206, 0.1);
+    border-left: 3px solid #3182ce;
+    animation: slideInFromBottom 0.5s ease;
+  }
+  
+  @keyframes slideInFromBottom {
+    from {
+      transform: translateY(30px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  
+  .interactiveElement {
+    margin-top: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .miniGame {
+    background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 50px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 4px 15px rgba(49, 130, 206, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .miniGame:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(49, 130, 206, 0.4);
+  }
+  
+  .miniGame.clicked {
+    transform: scale(0.95);
+  }
+  
+  .miniGame::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(1);
+    animation: clickRipple 0.6s ease-out;
+  }
+  
+  @keyframes clickRipple {
+    0% {
+      opacity: 1;
+      transform: scale(0);
+    }
+    80% {
+      opacity: 0.5;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(40);
+    }
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+  
+  /* Media Queries */
+  @media (max-width: 768px) {
+    .loadingContent {
+      gap: 20px;
+    }
+    
+    .animationContainer {
+      height: 140px;
+    }
+    
+    .server {
+      width: 60px;
+      height: 100px;
+    }
+    
+    .loadingTitle {
+      font-size: 2rem;
+    }
+    
+    .loadingLogo {
+      width: 50px;
+      height: 50px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .loadingContent {
+      gap: 15px;
+    }
+    
+    .animationContainer {
+      height: 120px;
+    }
+    
+    .serverWakeup {
+      gap: 20px;
+    }
+    
+    .server {
+      width: 50px;
+      height: 80px;
+    }
+    
+    .loadingTitle {
+      font-size: 1.5rem;
+    }
+    
+    .loadingLogo {
+      width: 40px;
+      height: 40px;
+    }
+    
+    .infoBox h3, .syncrollyTip h3 {
+      font-size: 1rem;
+    }
+    
+    .factText {
+      font-size: 0.85rem;
+    }
+  }
