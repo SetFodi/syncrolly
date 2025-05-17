@@ -42,7 +42,7 @@ app.use(
     origin: function(origin, callback) {
       // Allow requests with no origin (like mobile apps, curl requests)
       if (!origin) return callback(null, true);
-      
+
       if (allowedFrontendUrls.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -338,59 +338,152 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Handle room joining
+  // Handle room joining with improved reliability
   socket.on(
     'join_room',
     async ({ roomId, userName, userId, isCreator }, callback) => {
       try {
-        let room = await roomsCollection.findOne({ roomId });
+        console.log(`User ${userName} (${userId}) attempting to join room ${roomId}. isCreator: ${isCreator}`);
 
-        if (!room) {
-          if (isCreator) {
-            room = {
-              roomId,
-              text: '',
-              messages: [],
-              users: {},
-              theme: 'light',
-              lastActivity: new Date(),
-              creatorId: userId,
-              isEditable: true,
-            };
-            await roomsCollection.insertOne(room);
-          } else {
-            return callback({ error: 'Room does not exist.' });
+        // Retry logic for finding or creating the room
+        let room = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!room && retryCount < maxRetries) {
+          try {
+            room = await roomsCollection.findOne({ roomId });
+
+            if (!room) {
+              if (isCreator) {
+                console.log(`Creating new room ${roomId} for creator ${userName} (${userId})`);
+                room = {
+                  roomId,
+                  text: '',
+                  messages: [],
+                  users: {},
+                  theme: 'light',
+                  lastActivity: new Date(),
+                  creatorId: userId,
+                  isEditable: true,
+                  editorMode: 'text', // Default editor mode
+                  createdAt: new Date(),
+                };
+
+                const result = await roomsCollection.insertOne(room);
+                if (!result.acknowledged) {
+                  throw new Error('Failed to create room in database');
+                }
+
+                console.log(`Room ${roomId} created successfully`);
+              } else {
+                console.log(`Room ${roomId} not found for non-creator ${userName}`);
+                return callback({ error: 'Room does not exist.' });
+              }
+            }
+          } catch (err) {
+            retryCount++;
+            console.error(`Attempt ${retryCount}/${maxRetries} failed to find/create room:`, err);
+
+            if (retryCount >= maxRetries) {
+              throw new Error(`Failed to find/create room after ${maxRetries} attempts`);
+            }
+
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
 
         // Add user to room
         room.users[userId] = userName;
-        await roomsCollection.updateOne(
-          { roomId },
-          {
-            $set: {
-              users: room.users,
-              lastActivity: new Date(),
-            },
-          },
-        );
 
+        // Update room with retry logic
+        let updateSuccess = false;
+        retryCount = 0;
+
+        while (!updateSuccess && retryCount < maxRetries) {
+          try {
+            const updateResult = await roomsCollection.updateOne(
+              { roomId },
+              {
+                $set: {
+                  users: room.users,
+                  lastActivity: new Date(),
+                },
+              },
+            );
+
+            if (updateResult.matchedCount === 0) {
+              throw new Error('Room not found during update');
+            }
+
+            updateSuccess = true;
+            console.log(`User ${userName} added to room ${roomId} successfully`);
+          } catch (err) {
+            retryCount++;
+            console.error(`Attempt ${retryCount}/${maxRetries} failed to update room:`, err);
+
+            if (retryCount >= maxRetries) {
+              throw new Error(`Failed to update room after ${maxRetries} attempts`);
+            }
+
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        // Join the socket.io room
         socket.join(roomId);
         socketUserMap.set(socket.id, { userId, roomId });
 
+        // Notify other users in the room
+        socket.to(roomId).emit('user_joined', {
+          userId,
+          userName,
+          timestamp: new Date().toISOString()
+        });
+
+        // Fetch files with retry logic
+        let files = [];
+        retryCount = 0;
+
+        while (retryCount < maxRetries) {
+          try {
+            files = await uploadsCollection.find({ roomId }).toArray();
+            break;
+          } catch (err) {
+            retryCount++;
+            console.error(`Attempt ${retryCount}/${maxRetries} failed to fetch files:`, err);
+
+            if (retryCount >= maxRetries) {
+              console.error('Failed to fetch files, will return empty array');
+              files = [];
+              break;
+            }
+
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        // Send success response with room data
         callback({
           success: true,
-          text: room.text, // Include initial text content
-          messages: room.messages,
-          theme: room.theme,
-          files: await uploadsCollection.find({ roomId }).toArray(),
+          text: room.text || '', // Include initial text content
+          messages: room.messages || [],
+          theme: room.theme || 'light',
+          files: files,
           users: room.users,
           isCreator: room.creatorId === userId,
-          isEditable: room.isEditable,
+          isEditable: room.isEditable !== false, // Default to true if undefined
+          editorMode: room.editorMode || 'text',
+          roomCreatedAt: room.createdAt,
         });
+
+        console.log(`User ${userName} (${userId}) successfully joined room ${roomId}`);
       } catch (error) {
         console.error('Error in join_room:', error);
-        callback({ error: 'Internal Server Error' });
+        callback({ error: 'Internal Server Error', details: error.message });
       }
     },
   );
@@ -619,17 +712,47 @@ cron.schedule('0 * * * *', async () => {
 // ===============================
 async function startServer() {
   try {
-    // Connect to MongoDB
-    await client.connect();
-    console.log('Connected to MongoDB');
+    // Connect to MongoDB with retry mechanism
+    let retries = 5;
+    let connected = false;
+
+    while (retries > 0 && !connected) {
+      try {
+        await client.connect();
+        connected = true;
+        console.log('Connected to MongoDB successfully');
+      } catch (err) {
+        console.error(`MongoDB connection attempt failed. Retries left: ${retries}`);
+        retries--;
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 2000 * (5 - retries)));
+      }
+    }
+
+    if (!connected) {
+      throw new Error('Failed to connect to MongoDB after multiple attempts');
+    }
+
+    // Set up MongoDB collections
     const db = client.db('syncrolly');
     roomsCollection = db.collection('rooms');
     uploadsCollection = db.collection('uploads');
     activeUsersCollection = db.collection('activeUsers');
 
+    // Add MongoDB connection error handler
+    client.on('error', (error) => {
+      console.error('MongoDB connection error:', error);
+      // Attempt to reconnect
+      console.log('Attempting to reconnect to MongoDB...');
+      client.connect()
+        .then(() => console.log('Reconnected to MongoDB'))
+        .catch(err => console.error('Failed to reconnect to MongoDB:', err));
+    });
+
     const PORT = process.env.PORT || 4000;
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on port ${PORT}`);
+      console.log(`Server is ready to accept connections at ${new Date().toISOString()}`);
     });
   } catch (error) {
     console.error('Error starting server:', error);

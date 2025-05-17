@@ -1226,6 +1226,35 @@ html, body {
   background-color: rgba(66, 153, 225, 0.4) !important; /* Increased opacity */
 }
 
+/* Remote cursor styles */
+.remoteCursor {
+  border-left: 2px solid #3182ce;
+  position: relative;
+  margin-left: -2px;
+  margin-right: -2px;
+  padding-right: 0;
+  z-index: 3;
+}
+
+.cursorTooltip {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  font-size: 12px;
+  font-family: sans-serif;
+  font-weight: bold;
+  color: white;
+  background-color: #3182ce;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1000;
+  transform: translateY(-5px);
+  opacity: 0.9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .room-container.light :global(.cm-gutters) {
   background-color: #f7fafc !important;
   color: #718096 !important;
@@ -1376,15 +1405,15 @@ html, body {
     max-width: 40px;
   }
 
-  .chat-toggle, 
+  .chat-toggle,
   .theme-toggle,
   .language-select {
     flex-basis: auto;
   }
 
-  .toggle-btn, 
-  .chat-btn, 
-  .files-btn, 
+  .toggle-btn,
+  .chat-btn,
+  .files-btn,
   .download-btn {
     font-size: 0.8rem;
     padding: 8px 15px;
@@ -1450,9 +1479,9 @@ html, body {
     max-width: 30px;
   }
 
-  .toggle-btn, 
-  .chat-btn, 
-  .files-btn, 
+  .toggle-btn,
+  .chat-btn,
+  .files-btn,
   .download-btn {
     font-size: 0.7rem;
     padding: 6px 12px;

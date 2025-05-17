@@ -6,7 +6,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #121212 0%, #2d3748 100%);
+    background: linear-gradient(135deg, #0a0e17 0%, #1a202c 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -14,7 +14,17 @@
     color: white;
     overflow: hidden;
   }
-  
+
+  /* Particle canvas */
+  .particleCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
   .loadingContainer::before {
     content: '';
     position: absolute;
@@ -25,9 +35,10 @@
     top: -100%;
     left: -100%;
     animation: gridMove 120s linear infinite;
-    opacity: 0.5;
+    opacity: 0.3;
+    z-index: 0;
   }
-  
+
   @keyframes gridMove {
     0% {
       transform: rotate(0deg);
@@ -36,7 +47,7 @@
       transform: rotate(360deg);
     }
   }
-  
+
   .loadingContent {
     max-width: 650px;
     width: 90%;
@@ -47,32 +58,46 @@
     position: relative;
     z-index: 2;
   }
-  
+
   .logoContainer {
     display: flex;
     align-items: center;
     gap: 15px;
     margin-bottom: 10px;
   }
-  
+
   .loadingLogo {
     width: 70px;
     height: 70px;
     border-radius: 15px;
     animation: pulse 2s ease-in-out infinite;
   }
-  
+
   .loadingTitle {
-    font-size: 2.5rem;
-    font-weight: 700;
+    font-size: 2.8rem;
+    font-weight: 800;
     margin: 0;
     background: linear-gradient(90deg, #3182ce, #90cdf4);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
-  
+
+  .loadingSubtitle {
+    font-size: 0.9rem;
+    font-weight: 400;
+    margin-top: 5px;
+    background: linear-gradient(90deg, #a0aec0, #cbd5e0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 1px;
+  }
+
   .loadingTitle::after {
     content: '';
     position: absolute;
@@ -84,12 +109,12 @@
     transform-origin: left;
     animation: lineWidth 2.5s ease-in-out infinite;
   }
-  
+
   @keyframes lineWidth {
     0%, 100% { transform: scaleX(0.5); opacity: 0.5; }
     50% { transform: scaleX(1); opacity: 1; }
   }
-  
+
   .animationContainer {
     width: 100%;
     height: 180px;
@@ -100,7 +125,7 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
-  
+
   .serverWakeup {
     width: 100%;
     height: 100%;
@@ -110,7 +135,7 @@
     gap: 40px;
     position: relative;
   }
-  
+
   .server {
     width: 80px;
     height: 130px;
@@ -125,13 +150,13 @@
     transform: scale(0.8);
     transition: all 0.8s cubic-bezier(0.165, 0.84, 0.44, 1);
   }
-  
+
   .server.active {
     opacity: 1;
     transform: scale(1);
     box-shadow: 0 0 20px rgba(49, 130, 206, 0.4);
   }
-  
+
   .serverLights {
     display: flex;
     flex-wrap: wrap;
@@ -139,7 +164,7 @@
     justify-content: center;
     padding: 10px;
   }
-  
+
   .light {
     width: 8px;
     height: 8px;
@@ -147,25 +172,25 @@
     background-color: #48bb78;
     animation: blink 2s infinite alternate;
   }
-  
+
   .server:not(.active) .light {
     background-color: #718096;
     animation: none;
   }
-  
+
   .light:nth-child(2n) {
     animation-delay: 0.5s;
   }
-  
+
   .light:nth-child(3n) {
     animation-delay: 0.8s;
   }
-  
+
   @keyframes blink {
     0%, 80% { opacity: 1; }
     100% { opacity: 0.3; }
   }
-  
+
   .yjsConnection {
     position: absolute;
     top: 0;
@@ -175,11 +200,11 @@
     opacity: 0;
     transition: opacity 0.8s ease;
   }
-  
+
   .yjsConnection.active {
     opacity: 1;
   }
-  
+
   .dataPacket {
     position: absolute;
     width: 10px;
@@ -190,19 +215,19 @@
     animation-fill-mode: both;
     box-shadow: 0 0 10px #3182ce;
   }
-  
+
   .dataPacket:nth-child(1) {
     animation-delay: 0s;
   }
-  
+
   .dataPacket:nth-child(2) {
     animation-delay: 1.3s;
   }
-  
+
   .dataPacket:nth-child(3) {
     animation-delay: 2.6s;
   }
-  
+
   @keyframes movePacket {
     0% {
       left: 25%;
@@ -232,14 +257,14 @@
       scale: 0.5;
     }
   }
-  
+
   .loadingStatus {
     width: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .loadingBar {
     width: 100%;
     height: 8px;
@@ -247,7 +272,7 @@
     border-radius: 20px;
     overflow: hidden;
   }
-  
+
   .loadingProgress {
     height: 100%;
     width: 25%;
@@ -255,14 +280,71 @@
     border-radius: 20px;
     transition: width 1s cubic-bezier(0.165, 0.84, 0.44, 1);
   }
-  
+
   .loadingMessage {
     font-size: 1rem;
     margin: 0;
     text-align: center;
     color: #e2e8f0;
   }
-  
+
+  .waitingTooLong {
+    color: #fc8181;
+    font-style: italic;
+  }
+
+  /* Connection status indicator */
+  .connectionStatusIndicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 16px;
+    border-radius: 30px;
+    margin-bottom: 5px;
+  }
+
+  .statusDot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .statusDot.connecting {
+    background-color: #ecc94b; /* Yellow */
+    animation: pulse 1.5s infinite;
+  }
+
+  .statusDot.connected {
+    background-color: #48bb78; /* Green */
+  }
+
+  .statusDot.failed {
+    background-color: #e53e3e; /* Red */
+  }
+
+  .statusText {
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  .elapsedTime {
+    font-size: 0.8rem;
+    color: #a0aec0;
+    margin-left: 5px;
+  }
+
+  .retryCount {
+    font-size: 0.8rem;
+    color: #fc8181;
+    margin-left: 10px;
+    background: rgba(229, 62, 62, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+
   .infoBox, .syncrollyTip {
     width: 100%;
     padding: 15px 20px;
@@ -270,27 +352,27 @@
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
-  
+
   .infoBox h3, .syncrollyTip h3 {
     margin-top: 0;
     margin-bottom: 8px;
     font-size: 1.1rem;
     color: #90cdf4;
   }
-  
+
   .factText {
     margin: 0;
     line-height: 1.5;
     font-size: 0.95rem;
     animation: fadeText 8s ease infinite;
   }
-  
+
   @keyframes fadeText {
     0%, 10% { opacity: 0.5; }
     20%, 90% { opacity: 1; }
     100% { opacity: 0.5; }
   }
-  
+
   .syncTimeoutNotice {
     margin-top: 15px;
     padding: 10px;
@@ -298,19 +380,67 @@
     border-left: 3px solid #e53e3e;
     border-radius: 4px;
   }
-  
+
   .syncTimeoutNotice p {
     margin: 0;
     font-size: 0.9rem;
     color: #fc8181;
   }
-  
+
+  .longWaitMessage {
+    margin-top: 8px !important;
+    font-weight: 500;
+  }
+
+  /* Retry button styles */
+  .retryContainer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    animation: fadeIn 0.5s ease;
+    margin-top: 10px;
+  }
+
+  .retryButton {
+    background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+  }
+
+  .retryButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(229, 62, 62, 0.4);
+  }
+
+  .retryButton:active {
+    transform: translateY(1px);
+  }
+
+  .retryText {
+    font-size: 0.9rem;
+    color: #a0aec0;
+    margin: 0;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   .syncrollyTip {
     background: rgba(49, 130, 206, 0.1);
     border-left: 3px solid #3182ce;
     animation: slideInFromBottom 0.5s ease;
   }
-  
+
   @keyframes slideInFromBottom {
     from {
       transform: translateY(30px);
@@ -321,14 +451,14 @@
       opacity: 1;
     }
   }
-  
+
   .interactiveElement {
     margin-top: 10px;
     width: 100%;
     display: flex;
     justify-content: center;
   }
-  
+
   .miniGame {
     background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
     border: none;
@@ -342,16 +472,16 @@
     position: relative;
     overflow: hidden;
   }
-  
+
   .miniGame:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 20px rgba(49, 130, 206, 0.4);
   }
-  
+
   .miniGame.clicked {
     transform: scale(0.95);
   }
-  
+
   .miniGame::after {
     content: '';
     position: absolute;
@@ -365,7 +495,7 @@
     transform: scale(1);
     animation: clickRipple 0.6s ease-out;
   }
-  
+
   @keyframes clickRipple {
     0% {
       opacity: 1;
@@ -379,7 +509,7 @@
       transform: scale(40);
     }
   }
-  
+
   @keyframes pulse {
     0%, 100% {
       transform: scale(1);
@@ -388,63 +518,63 @@
       transform: scale(1.05);
     }
   }
-  
+
   /* Media Queries */
   @media (max-width: 768px) {
     .loadingContent {
       gap: 20px;
     }
-    
+
     .animationContainer {
       height: 140px;
     }
-    
+
     .server {
       width: 60px;
       height: 100px;
     }
-    
+
     .loadingTitle {
       font-size: 2rem;
     }
-    
+
     .loadingLogo {
       width: 50px;
       height: 50px;
     }
   }
-  
+
   @media (max-width: 480px) {
     .loadingContent {
       gap: 15px;
     }
-    
+
     .animationContainer {
       height: 120px;
     }
-    
+
     .serverWakeup {
       gap: 20px;
     }
-    
+
     .server {
       width: 50px;
       height: 80px;
     }
-    
+
     .loadingTitle {
       font-size: 1.5rem;
     }
-    
+
     .loadingLogo {
       width: 40px;
       height: 40px;
     }
-    
+
     .infoBox h3, .syncrollyTip h3 {
       font-size: 1rem;
     }
-    
+
     .factText {
       font-size: 0.85rem;
     }

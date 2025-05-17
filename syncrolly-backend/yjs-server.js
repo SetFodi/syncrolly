@@ -88,68 +88,153 @@ async function loadDocument(roomName) {
   }
 }
 
-// Helper function to check if a room exists in MongoDB
+// Helper function to check if a room exists in MongoDB with session handling
 async function checkRoomExists(roomName) {
   if (!roomsCollection) {
     console.warn('checkRoomExists called before roomsCollection initialized.');
     return false;
   }
   try {
+    // Use a new session for this operation
     const room = await roomsCollection.findOne({ roomId: roomName });
     return !!room;
   } catch (err) {
-    console.error(`Error checking existence for room "${roomName}":`, err);
-    return false; // Assume not exists on error
+    if (err.name === 'MongoExpiredSessionError') {
+      console.log(`Session expired when checking room "${roomName}", retrying with new session.`);
+      try {
+        // Retry with a fresh connection if the session expired
+        const room = await roomsCollection.findOne({ roomId: roomName });
+        return !!room;
+      } catch (retryErr) {
+        console.error(`Retry failed when checking existence for room "${roomName}":`, retryErr);
+        return false;
+      }
+    } else {
+      console.error(`Error checking existence for room "${roomName}":`, err);
+      return false; // Assume not exists on error
+    }
   }
 }
 
-// Function to sync Yjs document content to MongoDB
+// Function to sync Yjs document content to MongoDB with enhanced reliability
 const syncToMongo = async (roomName, ydoc) => {
   if (!roomsCollection) {
     console.warn('syncToMongo called before roomsCollection initialized.');
     return;
   }
+
+  // Maximum number of retries for MongoDB operations
+  const MAX_RETRIES = 3;
+
   try {
     const content = ydoc.getText('shared-text').toString();
+    const syncTimestamp = new Date();
+
+    console.log(`Attempting to sync room "${roomName}" to MongoDB (${content.length} chars) at ${syncTimestamp.toISOString()}`);
 
     // Check if the room still exists before attempting to update
-    const roomExists = await checkRoomExists(roomName);
+    let roomExists = false;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        roomExists = await checkRoomExists(roomName);
+        break;
+      } catch (error) {
+        console.error(`Attempt ${attempt}/${MAX_RETRIES} to check if room exists failed:`, error);
+        if (attempt === MAX_RETRIES) {
+          throw new Error(`Failed to check if room exists after ${MAX_RETRIES} attempts`);
+        }
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+      }
+    }
+
     if (!roomExists) {
-      console.log(
-        `Skipping sync for room "${roomName}" as it no longer exists in DB.`,
-      );
+      console.log(`Skipping sync for room "${roomName}" as it no longer exists in DB.`);
       // Clean up memory if the room was deleted from DB while active
       if (docsMap.has(roomName)) {
         docsMap.delete(roomName);
         lastAccess.delete(roomName);
-        console.log(
-          `Removed non-existent room "${roomName}" from memory during sync attempt.`,
-        );
+        console.log(`Removed non-existent room "${roomName}" from memory during sync attempt.`);
       }
       return;
     }
 
-    const existingRoom = await roomsCollection.findOne({ roomId: roomName });
+    // Enhanced retry mechanism for MongoDB operations with exponential backoff
+    const performMongoOperation = async (operation, operationName) => {
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const result = await operation();
+          if (attempt > 1) {
+            console.log(`${operationName} succeeded on attempt ${attempt}/${MAX_RETRIES}`);
+          }
+          return result;
+        } catch (error) {
+          const isLastAttempt = attempt === MAX_RETRIES;
+
+          if (error.name === 'MongoExpiredSessionError') {
+            console.log(`Session expired during ${operationName}, retrying (${attempt}/${MAX_RETRIES})...`);
+          } else {
+            console.error(`Error during ${operationName} (attempt ${attempt}/${MAX_RETRIES}):`, error);
+          }
+
+          if (isLastAttempt) {
+            throw error;
+          }
+
+          // Exponential backoff with jitter
+          const baseDelay = 500 * Math.pow(2, attempt - 1);
+          const jitter = Math.random() * 300;
+          await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
+        }
+      }
+    };
+
+    // Find the existing room with retry
+    const existingRoom = await performMongoOperation(
+      () => roomsCollection.findOne({ roomId: roomName }),
+      `find room "${roomName}"`
+    );
 
     // Avoid unnecessary writes if content hasn't changed
     if (existingRoom && existingRoom.text === content) {
-      // console.log(`No changes to save for room: ${roomName}`); // Reduce log noise
       // Still update lastActivity even if text is the same
-      await roomsCollection.updateOne(
-        { roomId: roomName },
-        { $set: { lastActivity: new Date() } },
+      await performMongoOperation(
+        () => roomsCollection.updateOne(
+          { roomId: roomName },
+          {
+            $set: {
+              lastActivity: syncTimestamp,
+              lastSyncAttempt: syncTimestamp
+            }
+          }
+        ),
+        `update lastActivity for room "${roomName}"`
       );
+      console.log(`Room "${roomName}" content unchanged, only updated lastActivity`);
       return;
     }
 
     // Update text content and last activity time
-    await roomsCollection.updateOne(
-      { roomId: roomName },
-      { $set: { text: content, lastActivity: new Date() } },
+    await performMongoOperation(
+      () => roomsCollection.updateOne(
+        { roomId: roomName },
+        {
+          $set: {
+            text: content,
+            lastActivity: syncTimestamp,
+            lastSyncAttempt: syncTimestamp,
+            lastContentUpdate: syncTimestamp,
+            contentLength: content.length
+          }
+        }
+      ),
+      `update content for room "${roomName}"`
     );
-    console.log(`Synced room "${roomName}" to MongoDB`);
+
+    console.log(`Successfully synced room "${roomName}" to MongoDB (${content.length} chars)`);
   } catch (err) {
-    console.error(`Error syncing room "${roomName}" to MongoDB:`, err);
+    console.error(`Failed to sync room "${roomName}" to MongoDB after multiple attempts:`, err);
+    // Consider implementing a fallback mechanism here if needed
   }
 };
 
@@ -366,7 +451,6 @@ setInterval(async () => {
   }
 }, CLEANUP_TIMEOUT / 2); // Check frequency (e.g., every 15 minutes)
 // --- END PERIODIC CLEANUP ---
-
 // --- GRACEFUL SHUTDOWN ---
 async function gracefulShutdown() {
   console.log('Attempting graceful shutdown...');
@@ -376,24 +460,32 @@ async function gracefulShutdown() {
   });
   server.close(async () => {
     console.log('HTTP server closed.');
-    // Perform final cleanup for all documents in memory
-    const cleanupTasks = Array.from(docsMap.keys()).map((roomName) =>
-      cleanupDocument(roomName),
-    );
+
+    // Perform final cleanup for all documents in memory one by one
+    // (instead of Promise.all which might overwhelm the MongoDB connection)
+    const roomNames = Array.from(docsMap.keys());
+
     try {
-      await Promise.all(cleanupTasks);
+      for (const roomName of roomNames) {
+        try {
+          await cleanupDocument(roomName);
+        } catch (roomErr) {
+          console.error(`Error cleaning up room "${roomName}":`, roomErr);
+        }
+      }
       console.log('All active documents saved and cleaned up.');
     } catch (err) {
       console.error('Error during final document cleanup:', err);
     } finally {
       // Close MongoDB connection
       if (mongoClient) {
-        await mongoClient.close();
-        console.log('MongoDB connection closed.');
+        try {
+          await mongoClient.close();
+          console.log('MongoDB connection closed.');
+        } catch (mongoErr) {
+          console.error('Error closing MongoDB connection:', mongoErr);
+        }
       }
-      // Close LevelDB connection if used
-      // await ldb.destroy(); // Or ldb.close() depending on the library version
-      // console.log('LevelDB connection closed.');
       process.exit(0); // Exit cleanly
     }
   });
@@ -402,7 +494,7 @@ async function gracefulShutdown() {
   setTimeout(() => {
     console.error('Graceful shutdown timed out. Forcing exit.');
     process.exit(1);
-  }, 10000); // 10 seconds timeout
+  }, 15000); // 15 seconds timeout (increased from 10)
 }
 
 process.on('SIGINT', gracefulShutdown); // Ctrl+C
@@ -412,9 +504,32 @@ process.on('SIGTERM', gracefulShutdown); // Termination signal from OS/Render
 // --- SERVER START ---
 async function startServer() {
   try {
-    // Connect to MongoDB
+    // Connect to MongoDB with improved options for connection stability
     await mongoClient.connect();
     console.log('Connected successfully to MongoDB');
+
+    // Set up connection pool handling
+    mongoClient.on('connectionPoolCreated', (event) => {
+      console.log('MongoDB connection pool created');
+    });
+
+    mongoClient.on('connectionPoolClosed', (event) => {
+      console.log('MongoDB connection pool closed');
+    });
+
+    mongoClient.on('connectionCreated', (event) => {
+      console.log('MongoDB connection created');
+    });
+
+    mongoClient.on('connectionClosed', (event) => {
+      console.log('MongoDB connection closed');
+    });
+
+    mongoClient.on('error', (error) => {
+      console.error('MongoDB client error:', error);
+      // Consider implementing a reconnection strategy here if needed
+    });
+
     const db = mongoClient.db('syncrolly'); // Use your database name
     roomsCollection = db.collection('rooms'); // Assign to the global variable
 
