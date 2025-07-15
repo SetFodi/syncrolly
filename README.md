@@ -498,16 +498,13 @@ We welcome contributions! Here's how you can help:
 ## 📞 Contact
 
 ### Developer
-- **Name**: Your Name
+- **Name**: Luka Partenadze
 - **Company**: LGA Corporation
 - **Instagram**: [@syncrolly](https://www.instagram.com/syncrolly/)
 - **Website**: [syncrolly.com](https://syncrolly.com)
 
 ### Support
-- **Email**: support@syncrolly.com
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/syncrolly/issues)
-- **Documentation**: [Wiki](https://github.com/yourusername/syncrolly/wiki)
-
+- **Email**: lukafartenadze2004@gmail.com
 ---
 
 <div align="center">
